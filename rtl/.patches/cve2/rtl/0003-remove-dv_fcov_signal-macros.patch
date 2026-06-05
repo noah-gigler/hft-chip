@@ -1,0 +1,112 @@
+From 058e51ac2e551b902e10b17433d74d80a08310e2 Mon Sep 17 00:00:00 2001
+From: Philippe Sauter <phsauter@iis.ee.ethz.ch>
+Date: Fri, 19 Dec 2025 16:58:05 +0100
+Subject: [PATCH] remove dv_fcov_signal macros
+
+---
+ cve2_controller.sv      | 13 -------------
+ cve2_id_stage.sv        | 10 ----------
+ cve2_load_store_unit.sv |  8 --------
+ cve2_wb.sv              |  1 -
+ 4 files changed, 32 deletions(-)
+
+diff --git a/cve2_controller.sv b/cve2_controller.sv
+index 3e2a5965..a898379a 100644
+--- a/cve2_controller.sv
++++ b/cve2_controller.sv
+@@ -9,7 +9,6 @@
+  */
+ 
+ `include "common_cells/assertions.svh"
+-`include "dv_fcov_macros.svh"
+ 
+ module cve2_controller #(
+  ) (
+@@ -751,18 +750,6 @@ module cve2_controller #(
+     end
+   end
+ 
+-  //////////
+-  // FCOV //
+-  //////////
+-
+-  `DV_FCOV_SIGNAL(logic, interrupt_taken, (ctrl_fsm_cs != IRQ_TAKEN) & (ctrl_fsm_ns == IRQ_TAKEN))
+-  `DV_FCOV_SIGNAL(logic, debug_entry_if,
+-      (ctrl_fsm_cs != DBG_TAKEN_IF) & (ctrl_fsm_ns == DBG_TAKEN_IF))
+-  `DV_FCOV_SIGNAL(logic, debug_entry_id,
+-      (ctrl_fsm_cs != DBG_TAKEN_ID) & (ctrl_fsm_ns == DBG_TAKEN_ID))
+-  `DV_FCOV_SIGNAL(logic, pipe_flush, (ctrl_fsm_cs != FLUSH) & (ctrl_fsm_ns == FLUSH))
+-  `DV_FCOV_SIGNAL(logic, debug_req, debug_req_i & ~debug_mode_q)
+-
+   ////////////////
+   // Assertions //
+   ////////////////
+diff --git a/cve2_id_stage.sv b/cve2_id_stage.sv
+index 1e273124..5039c9d6 100644
+--- a/cve2_id_stage.sv
++++ b/cve2_id_stage.sv
+@@ -16,7 +16,6 @@
+  */
+ 
+ `include "common_cells/assertions.svh"
+-`include "dv_fcov_macros.svh"
+ 
+ module cve2_id_stage #(
+   parameter bit               RV32E           = 0,
+@@ -883,15 +882,6 @@ module cve2_id_stage #(
+   assign perf_wfi_wait_o = wfi_insn_dec;
+   assign perf_div_wait_o = stall_multdiv & div_en_dec;
+ 
+-  //////////
+-  // FCOV //
+-  //////////
+-
+-  `DV_FCOV_SIGNAL(logic, branch_taken,
+-    instr_executing & (id_fsm_q == FIRST_CYCLE) & branch_decision_i)
+-  `DV_FCOV_SIGNAL(logic, branch_not_taken,
+-    instr_executing & (id_fsm_q == FIRST_CYCLE) & ~branch_decision_i)
+-
+   ////////////////
+   // Assertions //
+   ////////////////
+diff --git a/cve2_load_store_unit.sv b/cve2_load_store_unit.sv
+index 9f367ed5..5fe46ac8 100644
+--- a/cve2_load_store_unit.sv
++++ b/cve2_load_store_unit.sv
+@@ -13,7 +13,6 @@
+  */
+ 
+ `include "common_cells/assertions.svh"
+-`include "dv_fcov_macros.svh"
+ 
+ module cve2_load_store_unit
+ (
+@@ -494,13 +493,6 @@ module cve2_load_store_unit
+ 
+   assign busy_o = (ls_fsm_cs != IDLE);
+ 
+-  //////////
+-  // FCOV //
+-  //////////
+-
+-  `DV_FCOV_SIGNAL(logic, ls_error_exception, (load_err_o | store_err_o) & ~pmp_err_q)
+-  `DV_FCOV_SIGNAL(logic, ls_pmp_exception, (load_err_o | store_err_o) & pmp_err_q)
+-
+   ////////////////
+   // Assertions //
+   ////////////////
+diff --git a/cve2_wb.sv b/cve2_wb.sv
+index 50f61db3..ed93441f 100644
+--- a/cve2_wb.sv
++++ b/cve2_wb.sv
+@@ -11,7 +11,6 @@
+  */
+ 
+ `include "common_cells/assertions.svh"
+-`include "dv_fcov_macros.svh"
+ 
+ module cve2_wb #(
+ ) (
+-- 
+2.43.5
+

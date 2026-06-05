@@ -1,0 +1,67 @@
+packages:
+  apb:
+    revision: null
+    version: null
+    source:
+      Path: rtl/apb
+    dependencies:
+    - common_cells
+  common_cells:
+    revision: null
+    version: null
+    source:
+      Path: rtl/common_cells
+    dependencies:
+    - common_verification
+    - tech_cells_generic
+  common_verification:
+    revision: null
+    version: null
+    source:
+      Path: rtl/common_verification
+    dependencies: []
+  cve2:
+    revision: null
+    version: null
+    source:
+      Path: rtl/cve2
+    dependencies: []
+  idma:
+    revision: null
+    version: null
+    source:
+      Path: rtl/idma
+    dependencies:
+    - common_cells
+    - obi
+  obi:
+    revision: null
+    version: null
+    source:
+      Path: rtl/obi
+    dependencies:
+    - common_cells
+    - common_verification
+  obi_peripherals:
+    revision: null
+    version: null
+    source:
+      Path: rtl/obi_uart
+    dependencies:
+    - common_cells
+    - obi
+  riscv-dbg:
+    revision: null
+    version: null
+    source:
+      Path: rtl/riscv-dbg
+    dependencies:
+    - common_cells
+    - tech_cells_generic
+  tech_cells_generic:
+    revision: null
+    version: null
+    source:
+      Path: rtl/tech_cells_generic
+    dependencies:
+    - common_verification

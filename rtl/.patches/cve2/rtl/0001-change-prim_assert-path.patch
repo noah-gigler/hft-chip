@@ -1,0 +1,247 @@
+From e0486ba2d825ebbc0823b43a67b8d53cf5a653b2 Mon Sep 17 00:00:00 2001
+From: Philippe Sauter <phsauter@iis.ee.ethz.ch>
+Date: Fri, 19 Dec 2025 16:41:52 +0100
+Subject: [PATCH] change prim_assert path
+
+---
+ cve2_branch_predict.sv     |  2 +-
+ cve2_compressed_decoder.sv |  2 +-
+ cve2_controller.sv         |  2 +-
+ cve2_core.sv               |  2 +-
+ cve2_cs_registers.sv       |  2 +-
+ cve2_csr.sv                |  2 +-
+ cve2_decoder.sv            |  2 +-
+ cve2_fetch_fifo.sv         |  2 +-
+ cve2_id_stage.sv           |  2 +-
+ cve2_if_stage.sv           |  2 +-
+ cve2_load_store_unit.sv    |  2 +-
+ cve2_multdiv_fast.sv       |  2 +-
+ cve2_multdiv_slow.sv       |  2 +-
+ cve2_top.sv                | 14 +-------------
+ cve2_wb.sv                 |  2 +-
+ 15 files changed, 15 insertions(+), 27 deletions(-)
+
+diff --git a/cve2_branch_predict.sv b/cve2_branch_predict.sv
+index 2bc8bfc6..8f5ae49c 100644
+--- a/cve2_branch_predict.sv
++++ b/cve2_branch_predict.sv
+@@ -16,7 +16,7 @@
+  * The predictor is entirely combinational but takes clk/rst_n signals for use by assertions.
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ module cve2_branch_predict (
+   input  logic clk_i,
+diff --git a/cve2_compressed_decoder.sv b/cve2_compressed_decoder.sv
+index 0ce2a4a7..a95d58de 100644
+--- a/cve2_compressed_decoder.sv
++++ b/cve2_compressed_decoder.sv
+@@ -12,7 +12,7 @@
+  * assertions only.
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ module cve2_compressed_decoder (
+   input  logic        clk_i,
+diff --git a/cve2_controller.sv b/cve2_controller.sv
+index d14e9d20..3e2a5965 100644
+--- a/cve2_controller.sv
++++ b/cve2_controller.sv
+@@ -8,7 +8,7 @@
+  * Main controller of the processor
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ `include "dv_fcov_macros.svh"
+ 
+ module cve2_controller #(
+diff --git a/cve2_core.sv b/cve2_core.sv
+index 253eca38..ff7ec21c 100644
+--- a/cve2_core.sv
++++ b/cve2_core.sv
+@@ -8,7 +8,7 @@
+   `define RVFI
+ `endif
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ /**
+  * Top level module of the CVE2 RISC-V core
+diff --git a/cve2_cs_registers.sv b/cve2_cs_registers.sv
+index be94f68e..f811ce13 100644
+--- a/cve2_cs_registers.sv
++++ b/cve2_cs_registers.sv
+@@ -11,7 +11,7 @@
+  * Specification, draft version 1.11
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ module cve2_cs_registers #(
+   parameter bit               DbgTriggerEn      = 0,
+diff --git a/cve2_csr.sv b/cve2_csr.sv
+index e36e6666..4e5af2e1 100644
+--- a/cve2_csr.sv
++++ b/cve2_csr.sv
+@@ -7,7 +7,7 @@
+  * Control / status register primitive
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ module cve2_csr #(
+   parameter int unsigned    Width      = 32,
+diff --git a/cve2_decoder.sv b/cve2_decoder.sv
+index 7d524f57..476cbb32 100644
+--- a/cve2_decoder.sv
++++ b/cve2_decoder.sv
+@@ -12,7 +12,7 @@
+  * assertions only.
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ module cve2_decoder #(
+   parameter bit RV32E               = 0,
+diff --git a/cve2_fetch_fifo.sv b/cve2_fetch_fifo.sv
+index 8acb18e0..a39f2297 100644
+--- a/cve2_fetch_fifo.sv
++++ b/cve2_fetch_fifo.sv
+@@ -11,7 +11,7 @@
+  * clear_i clears the FIFO for the following cycle, including any new request
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ module cve2_fetch_fifo #(
+   parameter int unsigned NUM_REQS = 2
+diff --git a/cve2_id_stage.sv b/cve2_id_stage.sv
+index 997bbaeb..1e273124 100644
+--- a/cve2_id_stage.sv
++++ b/cve2_id_stage.sv
+@@ -15,7 +15,7 @@
+  * file.
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ `include "dv_fcov_macros.svh"
+ 
+ module cve2_id_stage #(
+diff --git a/cve2_if_stage.sv b/cve2_if_stage.sv
+index f71f3bd7..6f1e4b38 100644
+--- a/cve2_if_stage.sv
++++ b/cve2_if_stage.sv
+@@ -11,7 +11,7 @@
+  * the read instruction.
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ module cve2_if_stage import cve2_pkg::*; (
+   input  logic                         clk_i,
+diff --git a/cve2_load_store_unit.sv b/cve2_load_store_unit.sv
+index cee7bb9a..9f367ed5 100644
+--- a/cve2_load_store_unit.sv
++++ b/cve2_load_store_unit.sv
+@@ -12,7 +12,7 @@
+  * and to align bytes and halfwords.
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ `include "dv_fcov_macros.svh"
+ 
+ module cve2_load_store_unit
+diff --git a/cve2_multdiv_fast.sv b/cve2_multdiv_fast.sv
+index 1f23e8c6..367070a4 100644
+--- a/cve2_multdiv_fast.sv
++++ b/cve2_multdiv_fast.sv
+@@ -13,7 +13,7 @@
+  * 16x16 kernel multiplier and Long Division
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ module cve2_multdiv_fast #(
+   parameter cve2_pkg::rv32m_e RV32M = cve2_pkg::RV32MFast
+diff --git a/cve2_multdiv_slow.sv b/cve2_multdiv_slow.sv
+index f8ddfd03..af995662 100644
+--- a/cve2_multdiv_slow.sv
++++ b/cve2_multdiv_slow.sv
+@@ -10,7 +10,7 @@
+  * Baugh-Wooley multiplier and Long Division
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ module cve2_multdiv_slow
+ (
+diff --git a/cve2_top.sv b/cve2_top.sv
+index 6ae7d5a5..f8442e68 100644
+--- a/cve2_top.sv
++++ b/cve2_top.sv
+@@ -9,7 +9,7 @@
+   `define RVFI
+ `endif
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ 
+ /**
+  * Top level module of the CVE2 RISC-V core
+@@ -26,7 +26,6 @@ module cve2_top import cve2_pkg::*; #(
+   input  logic                         rst_ni,
+ 
+   input  logic                         test_en_i,     // enable all clock gates for testing
+-  input  prim_ram_1p_pkg::ram_1p_cfg_t ram_cfg_i,
+ 
+   input  logic [31:0]                  hart_id_i,
+   input  logic [31:0]                  boot_addr_i,
+@@ -275,17 +274,6 @@ module cve2_top import cve2_pkg::*; #(
+     .core_busy_o    (core_busy_d)
+   );
+ 
+-  ////////////////////////
+-  // Rams Instantiation //
+-  ////////////////////////
+-
+-  prim_ram_1p_pkg::ram_1p_cfg_t unused_ram_cfg;
+-  logic unused_ram_inputs;
+-
+-  assign unused_ram_cfg    = ram_cfg_i;
+-  assign unused_ram_inputs = (|NumAddrScrRounds);
+-
+-
+   // X checks for top-level outputs
+   `ASSERT_KNOWN(CVE2InstrReqX, instr_req_o)
+   `ASSERT_KNOWN_IF(CVE2InstrReqPayloadX, instr_addr_o, instr_req_o)
+diff --git a/cve2_wb.sv b/cve2_wb.sv
+index abd9f286..50f61db3 100644
+--- a/cve2_wb.sv
++++ b/cve2_wb.sv
+@@ -10,7 +10,7 @@
+  * a simple passthrough to write data direct to the register file.
+  */
+ 
+-`include "prim_assert.sv"
++`include "common_cells/assertions.svh"
+ `include "dv_fcov_macros.svh"
+ 
+ module cve2_wb #(
+-- 
+2.43.5
+
