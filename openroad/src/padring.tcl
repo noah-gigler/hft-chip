@@ -11,9 +11,9 @@
 set numPadsPerEdge 16
 set cornerToPad [expr {$padBond + $padD}]
 
-make_io_sites -horizontal_site sg13g2_ioSite \
-    -vertical_site sg13g2_ioSite \
-    -corner_site sg13g2_ioSite \
+make_io_sites -horizontal_site sg13cmos5l_ioSite \
+    -vertical_site sg13cmos5l_ioSite \
+    -corner_site sg13cmos5l_ioSite \
     -offset $padBond \
     -rotation_horizontal R0 \
     -rotation_vertical R0 \
@@ -87,7 +87,7 @@ place_pad -row IO_EAST -location [expr {$eastStart +  9*$eastPitch}] "pad_qty4_o
 place_pad -row IO_EAST -location [expr {$eastStart + 10*$eastPitch}] "pad_qty5_o"
 place_pad -row IO_EAST -location [expr {$eastStart + 11*$eastPitch}] "pad_qty6_o"
 place_pad -row IO_EAST -location [expr {$eastStart + 12*$eastPitch}] "pad_qty7_o"
-place_pad -row IO_EAST -location [expr {$eastStart + 13*$eastPitch}] "pad_spare0"
+place_pad -row IO_EAST -location [expr {$eastStart + 13*$eastPitch}] "pad_spare0_o"
 place_pad -row IO_EAST -location [expr {$eastStart + 14*$eastPitch}] "pad_vss2"
 place_pad -row IO_EAST -location [expr {$eastStart + 15*$eastPitch}] "pad_vdd2"
 
@@ -110,8 +110,8 @@ place_pad -row IO_NORTH -location [expr {$northStart -  8*$northPitch}] "pad_pri
 place_pad -row IO_NORTH -location [expr {$northStart -  9*$northPitch}] "pad_price7_o"
 place_pad -row IO_NORTH -location [expr {$northStart - 10*$northPitch}] "pad_price8_o"
 place_pad -row IO_NORTH -location [expr {$northStart - 11*$northPitch}] "pad_price9_o"
-place_pad -row IO_NORTH -location [expr {$northStart - 12*$northPitch}] "pad_spare1"
-place_pad -row IO_NORTH -location [expr {$northStart - 13*$northPitch}] "pad_spare2"
+place_pad -row IO_NORTH -location [expr {$northStart - 12*$northPitch}] "pad_spare1_o"
+place_pad -row IO_NORTH -location [expr {$northStart - 13*$northPitch}] "pad_spare2_o"
 place_pad -row IO_NORTH -location [expr {$northStart - 14*$northPitch}] "pad_vss3"
 place_pad -row IO_NORTH -location [expr {$northStart - 15*$northPitch}] "pad_vdd3"
 
