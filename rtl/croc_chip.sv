@@ -6,14 +6,14 @@ module croc_chip import orderbook_pkg::*; #() (
   input  wire market_i,
   input  wire op_i,
   input  wire side_i,
-  input  wire [9:0] price_i,
-  input  wire [7:0] qty_i,
+  input  wire [PRICE_WIDTH-1:0] price_i,
+  input  wire [QTY_WIDTH-1:0] qty_i,
 
   output wire valid_o,
   output wire market_o,
   output wire side_o,
-  output wire [9:0] price_o,
-  output wire [7:0] qty_o,
+  output wire [PRICE_WIDTH-1:0] price_o,
+  output wire [QTY_WIDTH-1:0] qty_o,
 
   output wire spare0_o,
   output wire spare1_o,
@@ -32,14 +32,14 @@ module croc_chip import orderbook_pkg::*; #() (
   wire in_market;
   wire in_op;
   wire in_side;
-  wire [9:0] in_price;
-  wire [7:0] in_qty;
+  wire [PRICE_WIDTH-1:0] in_price;
+  wire [QTY_WIDTH-1:0] in_qty;
   
   wire out_valid;
   wire out_market;
   wire out_side;
-  wire [9:0] out_price;
-  wire [7:0] out_qty;
+  wire [PRICE_WIDTH-1:0] out_price;
+  wire [QTY_WIDTH-1:0] out_qty;
 
   wire out_spare0, out_spare1, out_spare2;
 
