@@ -15,9 +15,9 @@ module croc_chip import orderbook_pkg::*; #() (
   output wire [PRICE_WIDTH-1:0] price_o,
   output wire [QTY_WIDTH-1:0] qty_o,
 
+  output wire error_o,
   output wire spare0_o,
   output wire spare1_o,
-  output wire spare2_o,
 
   inout wire VDD,
   inout wire VSS,
@@ -41,7 +41,7 @@ module croc_chip import orderbook_pkg::*; #() (
   wire [PRICE_WIDTH-1:0] out_price;
   wire [QTY_WIDTH-1:0] out_qty;
 
-  wire out_spare0, out_spare1, out_spare2;
+  wire out_error, out_spare0, out_spare1;
 
   (* dont_touch = "true" *) sg13cmos5l_IOPadIn pad_clk_i  (.pad(clk_i),  .p2c(clk));
   (* dont_touch = "true" *) sg13cmos5l_IOPadIn pad_rst_ni (.pad(rst_ni), .p2c(rst_n));
@@ -95,9 +95,9 @@ module croc_chip import orderbook_pkg::*; #() (
   (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA pad_qty6_o (.pad(qty_o[6]), .c2p(out_qty[6]));
   (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA pad_qty7_o (.pad(qty_o[7]), .c2p(out_qty[7]));
 
+  (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA  pad_error_o (.pad(error_o), .c2p(out_error));
   (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA  pad_spare0_o (.pad(spare0_o), .c2p(out_spare0));
   (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA  pad_spare1_o (.pad(spare1_o), .c2p(out_spare1));
-  (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA  pad_spare2_o (.pad(spare2_o), .c2p(out_spare2));
 
   (* dont_touch = "true" *) sg13cmos5l_IOPadVdd pad_vdd0 ();
   (* dont_touch = "true" *) sg13cmos5l_IOPadVdd pad_vdd1 ();
@@ -119,9 +119,9 @@ module croc_chip import orderbook_pkg::*; #() (
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio2 ();
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio3 ();
 
+  assign out_error = error0 | error1;
   assign out_spare0 = 1'b0;
   assign out_spare1 = 1'b0;
-  assign out_spare2 = 1'b0;
 
   localparam int N = 8;
 
@@ -135,17 +135,20 @@ module croc_chip import orderbook_pkg::*; #() (
   price_t [N-1:0] ask_prices1;
   qty_t   [N-1:0] ask_qtys1;
 
-  //logic valid0;
-  //logic valid1;
+  logic error0;
+  logic error1;
 
-  //assign valid0 = in_valid & (in_market == 0);
-  //assign valid1 = in_valid & (in_market == 1);
+  logic valid0;
+  logic valid1;
+
+  assign valid0 = in_valid & (in_market == 1'b0);
+  assign valid1 = in_valid & (in_market == 1'b1);
 
   orderbook #(.N(N)) orderbook0_i (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .valid_i      (in_valid),
+    .valid_i      (valid0),
     .op_i         (op_t'(in_op)),
     .side_i       (side_t'(in_side)),
     .price_i      (in_price),
@@ -154,14 +157,16 @@ module croc_chip import orderbook_pkg::*; #() (
     .bid_prices_o (bid_prices0),
     .bid_qtys_o   (bid_qtys0),
     .ask_prices_o (ask_prices0),
-    .ask_qtys_o   (ask_qtys0)
+    .ask_qtys_o   (ask_qtys0),
+
+    .error_o      (error0)
   );
 
   orderbook #(.N(N)) orderbook1_i (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .valid_i      (in_valid),
+    .valid_i      (valid1),
     .op_i         (op_t'(in_op)),
     .side_i       (side_t'(in_side)),
     .price_i      (in_price),
@@ -170,7 +175,9 @@ module croc_chip import orderbook_pkg::*; #() (
     .bid_prices_o (bid_prices1),
     .bid_qtys_o   (bid_qtys1),
     .ask_prices_o (ask_prices1),
-    .ask_qtys_o   (ask_qtys1)
+    .ask_qtys_o   (ask_qtys1),
+
+    .error_o      (error1)
   );
 
   trader #(.N(N)) trader_i (
