@@ -10,5 +10,5 @@
 ../rtl/croc_chip.sv
 ../rtl/orderbook_pkg.sv
 ../rtl/orderbook.sv
-../rtl/trader.sv
+../rtl/arb_trader.sv
 

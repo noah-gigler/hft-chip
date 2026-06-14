@@ -1,4 +1,4 @@
-module trader
+module arb_trader
     import orderbook_pkg::*;
 #(
     parameter int N = 8,
