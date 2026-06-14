@@ -35,13 +35,11 @@ module arb_trader
     output logic           error_o
 );
 
-    typedef enum logic [2:0] {
-        IDLE    = 3'd0,
-        TRADE1  = 3'd1,
-        TRADE2  = 3'd2,
-        WAIT    = 3'd3,
-        FLATTEN = 3'd4,
-        ERROR   = 3'd5
+    typedef enum logic [1:0] {
+        IDLE    = 2'd0,
+        TRADE1  = 2'd1,
+        TRADE2  = 2'd2,
+        FLATTEN = 2'd3
     } state_t;
 
     state_t state_q, state_d;
@@ -55,6 +53,7 @@ module arb_trader
 
     logic[1:0] pending_q, pending_d;
     logic signed[2*QTY_WIDTH-1:0] residual_q, residual_d;
+    logic error_q, error_d;
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
@@ -66,6 +65,7 @@ module arb_trader
             bid_market_q <= '0;
             pending_q    <= '0;
             residual_q   <= '0;
+            error_q      <= '0;
         end else begin
             state_q      <= state_d;
             ask_price_q  <= ask_price_d;
@@ -75,10 +75,13 @@ module arb_trader
             bid_market_q <= bid_market_d;
             pending_q    <= pending_d;
             residual_q   <= residual_d;
+            error_q      <= error_d;
         end
     end
 
     always_comb begin
+        logic arb0, arb1;
+
         state_d      = state_q;
         ask_price_d  = ask_price_q;
         bid_price_d  = bid_price_q;
@@ -87,6 +90,7 @@ module arb_trader
         bid_market_d = bid_market_q;
         pending_d    = pending_q;
         residual_d   = residual_q;
+        error_d      = error_q | (order_filled_i && pending_q == 0);
 
         // default
         valid_o  = '0;
@@ -94,135 +98,115 @@ module arb_trader
         side_o   = Bid;
         price_o  = '0;
         qty_o    = '0;
-        error_o  = '0;
+        error_o  = error_d;
 
-        if (state_q == ERROR) begin
-            error_o = '1;
-            state_d = ERROR;  
-        end else begin
+        if (!error_d) begin
             if (order_filled_i) begin
-                if (pending_d == 0) begin 
-                    state_d = ERROR;
-                end else begin 
-                    pending_d -= 1'b1;
+                pending_d -= 1'b1;
 
-                    if (filled_side_i == Bid) begin
-                        residual_d += filled_qty_i;
-                    end else begin 
-                        residual_d -= filled_qty_i;
-                    end
+                if (filled_side_i == Bid) begin
+                    residual_d += filled_qty_i;
+                end else begin 
+                    residual_d -= filled_qty_i;
                 end
             end
+            
+            case (state_q)
 
-            if (state_d != ERROR) begin
-                case (state_q)
+                IDLE: begin
+                    arb0 = bid_qtys0_i[0] > 0 && ask_qtys1_i[0] > 0 && (bid_prices0_i[0] > ask_prices1_i[0] + ARB_THRESHOLD);
+                    arb1 = bid_qtys1_i[0] > 0 && ask_qtys0_i[0] > 0 && (bid_prices1_i[0] > ask_prices0_i[0] + ARB_THRESHOLD);
 
-                    IDLE: begin
-                        logic arb0, arb1;
-                        arb0 = bid_qtys0_i[0] > 0 && ask_qtys1_i[0] > 0 && (bid_prices0_i[0] > ask_prices1_i[0] + ARB_THRESHOLD);
-                        arb1 = bid_qtys1_i[0] > 0 && ask_qtys0_i[0] > 0 && (bid_prices1_i[0] > ask_prices0_i[0] + ARB_THRESHOLD);
+                    if (arb0) begin 
+                        ask_market_d = '0;
+                        bid_market_d = '1;
 
-                        if (arb0) begin 
-                            ask_market_d = '0;
-                            bid_market_d = '1;
+                        ask_price_d  = bid_prices0_i[0];
+                        bid_price_d  = ask_prices1_i[0];
+                        arb_qty_d    = (bid_qtys0_i[0] < ask_qtys1_i[0]) ? bid_qtys0_i[0] : ask_qtys1_i[0];
+                        
+                        state_d      = TRADE1;
+                    end else if (arb1) begin
+                        ask_market_d = '1;
+                        bid_market_d = '0;
 
-                            ask_price_d  = bid_prices0_i[0];
-                            bid_price_d  = ask_prices1_i[0];
-                            arb_qty_d    = (bid_qtys0_i[0] < ask_qtys1_i[0]) ? bid_qtys0_i[0] : ask_qtys1_i[0];
-                            
-                            state_d      = TRADE1;
-                        end else if (arb1) begin
-                            ask_market_d = '1;
-                            bid_market_d = '0;
+                        ask_price_d  = bid_prices1_i[0];
+                        bid_price_d  = ask_prices0_i[0];
+                        arb_qty_d    = (bid_qtys1_i[0] < ask_qtys0_i[0]) ? bid_qtys1_i[0] : ask_qtys0_i[0];
 
-                            ask_price_d  = bid_prices1_i[0];
-                            bid_price_d  = ask_prices0_i[0];
-                            arb_qty_d    = (bid_qtys1_i[0] < ask_qtys0_i[0]) ? bid_qtys1_i[0] : ask_qtys0_i[0];
-
-                            state_d      = TRADE1;
-                        end
+                        state_d      = TRADE1;
                     end
+                end
 
-                    TRADE1: begin
-                        valid_o  = '1;
-                        market_o = ask_market_q;
-                        side_o   = Ask;
-                        price_o  = ask_price_q;
-                        qty_o    = arb_qty_q;
+                TRADE1: begin
+                    valid_o  = '1;
+                    market_o = ask_market_q;
+                    side_o   = Ask;
+                    price_o  = ask_price_q;
+                    qty_o    = arb_qty_q;
 
-                        pending_d += 1;
-                        state_d  = TRADE2;
-                    end
+                    pending_d += 1;
+                    state_d  = TRADE2;
+                end
 
-                    TRADE2: begin
-                        valid_o  = '1;
-                        market_o = bid_market_q;
-                        side_o   = Bid;
-                        price_o  = bid_price_q;
-                        qty_o    = arb_qty_q;
+                TRADE2: begin
+                    valid_o  = '1;
+                    market_o = bid_market_q;
+                    side_o   = Bid;
+                    price_o  = bid_price_q;
+                    qty_o    = arb_qty_q;
 
-                        pending_d += 1;
-                        state_d  = WAIT;
-                    end
+                    pending_d += 1;
+                    state_d  = FLATTEN;
+                end
 
-                    WAIT: begin
-                        if (pending_d == 0) begin
-                            if (residual_d == 0) begin
-                                state_d = IDLE;
+                FLATTEN: begin
+                    if (pending_q == 0) begin
+                        if (residual_q == 0) begin // changed to q (adds latency but stablizes signal)
+                            state_d = IDLE;
+                        end else begin
+                            logic sell;
+                            logic [QTY_WIDTH-1:0] res_qty;
+                            price_t price0, price1;
+                            qty_t   quantity0, quantity1;
+                            logic   liquid0, liquid1, market;
+
+                            sell = (residual_q > 0);
+                            res_qty = sell ? residual_q : (-residual_q); // value will be truncated 
+
+                            price0    = sell ? bid_prices0_i[0] : ask_prices0_i[0];
+                            price1    = sell ? bid_prices1_i[0] : ask_prices1_i[0];
+                            quantity0 = sell ? bid_qtys0_i[0]   : ask_qtys0_i[0];
+                            quantity1 = sell ? bid_qtys1_i[0]   : ask_qtys1_i[0];
+
+                            liquid0 = (quantity0 != 0);
+                            liquid1 = (quantity1 != 0);
+
+                            // if both liquid best price (ignores qty for now TODO)
+                            if (liquid0 && liquid1)
+                                market = sell ? (price1 > price0) : (price1 < price0);
+                            else if (liquid1)
+                                market = 1'b1;  
+                            else
+                                market = 1'b0;  
+
+                            if (liquid0 || liquid1) begin
+                                valid_o   = 1'b1;
+                                market_o  = market;
+                                side_o    = sell ? Ask : Bid;
+                                price_o   = market ? price1 : price0;
+                                qty_o     = res_qty;
+                                pending_d = pending_d + 1'b1;
                             end else begin
-                                state_d = FLATTEN;
+                                valid_o = 1'b0;   // no liquidity
                             end
                         end
                     end
+                end
 
-                    FLATTEN: begin
-                        if (pending_d == 0) begin
-                            if (residual_d == 0) begin
-                                state_d = IDLE;
-                            end else begin
-                                logic sell;
-                                logic [QTY_WIDTH-1:0] res_qty;
-                                price_t price0, price1;
-                                qty_t   quantity0, quantity1;
-                                logic   liquid0, liquid1, market;
+                default: state_d = IDLE;
 
-                                sell = (residual_d > 0);
-                                res_qty = sell ? residual_d : (-residual_d); // value will be truncated 
-
-                                price0    = sell ? bid_prices0_i[0] : ask_prices0_i[0];
-                                price1    = sell ? bid_prices1_i[0] : ask_prices1_i[0];
-                                quantity0 = sell ? bid_qtys0_i[0]   : ask_qtys0_i[0];
-                                quantity1 = sell ? bid_qtys1_i[0]   : ask_qtys1_i[0];
-
-                                liquid0 = (quantity0 != 0);
-                                liquid1 = (quantity1 != 0);
-
-                                // if both liquid best price (ignores qty for now TODO)
-                                if (liquid0 && liquid1)
-                                    market = sell ? (price1 > price0) : (price1 < price0);
-                                else if (liquid1)
-                                    market = 1'b1;  
-                                else
-                                    market = 1'b0;  
-
-                                if (liquid0 || liquid1) begin
-                                    valid_o   = 1'b1;
-                                    market_o  = market;
-                                    side_o    = sell ? Ask : Bid;
-                                    price_o   = market ? price1 : price0;
-                                    qty_o     = res_qty;
-                                    pending_d = pending_d + 1'b1;
-                                end else begin
-                                    valid_o = 1'b0;   // no liquidity
-                                end
-                            end
-                        end
-                    end
-
-                    default: state_d = IDLE;
-
-                endcase
-            end
+            endcase
         end
     end
 
