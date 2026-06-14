@@ -17,6 +17,7 @@ module croc_chip import orderbook_pkg::*; #() (
   output wire [QTY_WIDTH-1:0] qty_o,
 
   output wire error_o,
+  output wire spare0_o,
 
   inout wire VDD,
   inout wire VSS,
@@ -42,6 +43,7 @@ module croc_chip import orderbook_pkg::*; #() (
   wire [QTY_WIDTH-1:0] out_qty;
 
   wire out_error;
+  wire out_spare0;
 
   (* dont_touch = "true" *) sg13cmos5l_IOPadIn pad_clk_i  (.pad(clk_i),  .p2c(clk));
   (* dont_touch = "true" *) sg13cmos5l_IOPadIn pad_rst_ni (.pad(rst_ni), .p2c(rst_n));
@@ -74,7 +76,7 @@ module croc_chip import orderbook_pkg::*; #() (
   (* dont_touch = "true" *) sg13cmos5l_IOPadIn pad_qty7_i (.pad(qty_i[7]), .p2c(in_qty[7]));
 
   (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA pad_valid_o  (.pad(valid_o),  .c2p(out_valid));
-  (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA pad_market0_o (.pad(market_o[0]), .c2p(out_market[1]));
+  (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA pad_market0_o (.pad(market_o[0]), .c2p(out_market[0]));
   (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA pad_market1_o (.pad(market_o[1]), .c2p(out_market[1]));
   (* dont_touch = "true" *) sg13cmos5l_IOPadOut16mA pad_side_o   (.pad(side_o),  .c2p(out_side));
   
@@ -121,10 +123,8 @@ module croc_chip import orderbook_pkg::*; #() (
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio2 ();
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio3 ();
 
-  assign out_error = error0 | error1 | error2;
-  assign out_spare0 = 1'b0;
-
   localparam int N = 8;
+  assign out_spare0 = 1'b0;
 
   price_t [N-1:0] bid_prices0;
   qty_t   [N-1:0] bid_qtys0;
@@ -141,17 +141,27 @@ module croc_chip import orderbook_pkg::*; #() (
   price_t [N-1:0] ask_prices2;
   qty_t   [N-1:0] ask_qtys2;
 
-
   price_t [N-1:0] bid_prices3;
   qty_t   [N-1:0] bid_qtys3;
   price_t [N-1:0] ask_prices3;
   qty_t   [N-1:0] ask_qtys3;
 
-  logic error0, error1, error2, error3, error4, error5, error6, error7;
+  logic error0, error1, error2, error3, error4, error5, error6;
+  logic valid_ob0, valid_ob1, valid_ob2, valid_ob3, valid_trader0, valid_trader1, valid_trader2;
 
+  logic   valid_arb, valid_mom, valid_ema;
+  side_t  side_arb, side_mom, side_ema;
+  price_t price_arb, price_mom, price_ema;
+  qty_t   qty_arb, qty_mom, qty_ema;
+  logic   market_arb;
 
-  logic valid0;
-  logic valid1;
+  assign out_valid  = valid_arb;
+  assign out_market = market_arb;
+  assign out_side   = side_arb;
+  assign out_price  = price_arb;
+  assign out_qty    = qty_arb;
+
+  assign out_error = error0 | error1 | error2 | error3 | error4 | error5 | error6;
 
   assign valid_ob0 = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 0);
   assign valid_ob1 = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 1);
@@ -159,8 +169,8 @@ module croc_chip import orderbook_pkg::*; #() (
   assign valid_ob3 = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 3);
 
   assign valid_trader0 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market < 2);
-  assign valid_trader1 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market < 2);
-  assign valid_trader2 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market < 2);
+  assign valid_trader1 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market == 2);
+  assign valid_trader2 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market == 3);
 
   orderbook #(.N(N)) orderbook0_i (
     .clk_i        (clk),
@@ -253,12 +263,57 @@ module croc_chip import orderbook_pkg::*; #() (
     .filled_qty_i   (in_qty),
     .filled_side_i  (side_t'(in_side)),
 
-    .valid_o  (out_valid),
-    .market_o (out_market),
-    .side_o   (out_side),
-    .price_o  (out_price),
-    .qty_o    (out_qty),
+    .valid_o  (valid_arb),
+    .market_o (market_arb),
+    .side_o   (side_arb),
+    .price_o  (price_arb),
+    .qty_o    (qty_arb),
     .error_o  (error4)
   );
+
+  momentum_trader #(.N(N)) mom_trader_i (
+    .clk_i        (clk),
+    .rst_ni       (rst_n),
+
+    .bid_prices_i (bid_prices2),
+    .bid_qtys_i   (bid_qtys2),
+    .ask_prices_i (ask_prices2),
+    .ask_qtys_i   (ask_qtys2),
+
+    .order_filled_i (valid_trader1),
+    .filled_price_i (in_price),
+    .filled_qty_i   (in_qty),
+    .filled_side_i  (side_t'(in_side)),
+
+    .valid_o  (valid_mom),
+    .side_o   (side_mom),
+    .price_o  (price_mom),
+    .qty_o    (qty_mom),
+    .error_o  (error5)
+  );
+
+  ema_trader #(.N(N)) ema_trader_i (
+    .clk_i        (clk),
+    .rst_ni       (rst_n),
+
+    .bid_prices_i (bid_prices3),
+    .bid_qtys_i   (bid_qtys3),
+    .ask_prices_i (ask_prices3),
+    .ask_qtys_i   (ask_qtys3),
+
+    .order_filled_i (valid_trader2),
+    .filled_price_i (in_price),
+    .filled_qty_i   (in_qty),
+    .filled_side_i  (side_t'(in_side)),
+
+    .valid_o  (valid_ema),
+    .side_o   (side_ema),
+    .price_o  (price_ema),
+    .qty_o    (qty_ema),
+    .error_o  (error6)
+  );
+
+
+  // trade_abiter
 
 endmodule

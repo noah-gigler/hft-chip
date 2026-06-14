@@ -9,8 +9,8 @@ sources:
   - rtl/orderbook_pkg.sv
   - rtl/orderbook.sv
   - rtl/arb_trader.sv
-  # - rtl/imbalance_trader.sv
-  # - rtl/arb_trader.sv
+  - rtl/momentum_trader.sv
+  - rtl/ema_trader.sv
 
 #- target: simulation
 #    files:

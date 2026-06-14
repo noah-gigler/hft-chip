@@ -11,4 +11,6 @@
 ../rtl/orderbook_pkg.sv
 ../rtl/orderbook.sv
 ../rtl/arb_trader.sv
+../rtl/momentum_trader.sv
+../rtl/ema_trader.sv
 

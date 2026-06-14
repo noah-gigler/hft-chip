@@ -8,5 +8,9 @@ package orderbook_pkg;
     typedef enum logic {Public, Private} msg_type_t;
     localparam price_t DEFAULT_BID = '0; // min value
     localparam price_t DEFAULT_ASK = '1; // max value
+
+    function automatic qty_t min3(input int a, b, c);
+        return qty_t'(a < b ? (a < c ? a : c) : (b < c ? b : c));
+    endfunction
 endpackage
 
