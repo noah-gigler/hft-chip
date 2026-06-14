@@ -155,11 +155,16 @@ module croc_chip import orderbook_pkg::*; #() (
   qty_t   qty_arb, qty_mom, qty_ema;
   logic   market_arb;
 
-  assign out_valid  = valid_arb;
-  assign out_market = market_arb;
-  assign out_side   = side_arb;
-  assign out_price  = price_arb;
-  assign out_qty    = qty_arb;
+  logic grant_mom, grant_ema;
+
+  assign grant_mom = valid_mom & ~valid_arb;
+  assign grant_ema = valid_ema & ~valid_arb & ~valid_mom;
+
+  assign out_valid  = valid_arb | valid_mom | valid_ema;
+  assign out_market = valid_arb ? {1'b0, market_arb} : valid_mom ? 2'd2 : 2'd3;
+  assign out_side   = valid_arb ? side_arb : valid_mom ? side_mom : side_ema;
+  assign out_price  = valid_arb ? price_arb : valid_mom ? price_mom : price_ema;
+  assign out_qty    = valid_arb ? qty_arb : valid_mom ? qty_mom : qty_ema;
 
   assign out_error = error0 | error1 | error2 | error3 | error4 | error5 | error6;
 
@@ -171,6 +176,8 @@ module croc_chip import orderbook_pkg::*; #() (
   assign valid_trader0 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market < 2);
   assign valid_trader1 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market == 2);
   assign valid_trader2 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market == 3);
+
+
 
   orderbook #(.N(N)) orderbook0_i (
     .clk_i        (clk),
@@ -285,6 +292,8 @@ module croc_chip import orderbook_pkg::*; #() (
     .filled_qty_i   (in_qty),
     .filled_side_i  (side_t'(in_side)),
 
+    .grant_i (grant_mom),
+
     .valid_o  (valid_mom),
     .side_o   (side_mom),
     .price_o  (price_mom),
@@ -306,14 +315,13 @@ module croc_chip import orderbook_pkg::*; #() (
     .filled_qty_i   (in_qty),
     .filled_side_i  (side_t'(in_side)),
 
+    .grant_i (grant_ema),
+
     .valid_o  (valid_ema),
     .side_o   (side_ema),
     .price_o  (price_ema),
     .qty_o    (qty_ema),
     .error_o  (error6)
   );
-
-
-  // trade_abiter
 
 endmodule
