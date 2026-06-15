@@ -195,6 +195,99 @@ proc report_metrics { when {include_erc true} {include_clock_skew false} } {
   report_area_hierarchical
 }
 
+# Write a concise summary of the most important metrics to a .summary file.
+# Optional drc_file: path to a detailed-route DRC report to count violations.
+proc report_summary { when {drc_file ""} } {
+    global report_dir
+    set f $report_dir/${when}.summary
+
+    set sep  "================================================================"
+    set line "----------------------------------------------------------------"
+
+    set fh [open $f w]
+    puts $fh $sep
+    puts $fh " SUMMARY: $when"
+    puts $fh $sep
+
+    # --- Timing ---
+    puts $fh ""
+    puts $fh "TIMING"
+    puts $fh $line
+
+    set setup_v [sta::endpoint_violation_count max]
+    set hold_v  [sta::endpoint_violation_count min]
+
+    set cp [lindex [find_timing_paths -sort_by_slack] 0]
+    if {$cp ne ""} {
+        set wns [sta::format_time [[$cp path] slack]   4]
+        set cpa [sta::format_time [[$cp path] arrival] 4]
+    } else {
+        set wns "N/A"; set cpa "N/A"
+    }
+
+    puts $fh [format "  WNS              : %8s ns" $wns]
+    puts $fh [format "  Critical path    : %8s ns" $cpa]
+    puts $fh [format "  Setup violations : %4d  (%s)" $setup_v [expr {$setup_v == 0 ? "PASS" : "FAIL"}]]
+    puts $fh [format "  Hold  violations : %4d  (%s)" $hold_v  [expr {$hold_v  == 0 ? "PASS" : "FAIL"}]]
+
+    # --- ERC ---
+    puts $fh ""
+    puts $fh "ERC"
+    puts $fh $line
+    puts $fh [format "  Max slew  viol.  : %4d" [sta::max_slew_violation_count]]
+    puts $fh [format "  Max fanout viol. : %4d" [sta::max_fanout_violation_count]]
+    puts $fh [format "  Max cap   viol.  : %4d" [sta::max_capacitance_violation_count]]
+
+    # --- DRC ---
+    if {$drc_file ne "" && [file exists $drc_file]} {
+        set fdr [open $drc_file r]
+        set cnt [regexp -all {violation type:} [read $fdr]]
+        close $fdr
+        puts $fh ""
+        puts $fh "DRC"
+        puts $fh $line
+        puts $fh [format "  DRC violations   : %4d  (%s)" $cnt [expr {$cnt == 0 ? "CLEAN" : "FAIL"}]]
+    }
+
+    # --- Area ---
+    puts $fh ""
+    puts $fh "AREA"
+    puts $fh $line
+
+    set db    [::ord::get_db]
+    set block [[$db getChip] getBlock]
+    set dbu   [expr {double([[$db getTech] getDbUnitsPerMicron])}]
+
+    set die_bbox  [$block getDieArea]
+    set core_bbox [$block getCoreArea]
+    set die_area  [expr {[$die_bbox  dx] * [$die_bbox  dy] / ($dbu * $dbu)}]
+    set core_area [expr {[$core_bbox dx] * [$core_bbox dy] / ($dbu * $dbu)}]
+
+    set sc_area 0.0
+    foreach inst [$block getInsts] {
+        set m [$inst getMaster]
+        if {[$m isFiller] || [$m isPad] || [$m isBlock] || [$m isCover]} continue
+        set sc_area [expr {$sc_area + [$m getWidth] * [$m getHeight]}]
+    }
+    set sc_area [expr {$sc_area / ($dbu * $dbu)}]
+    set util    [expr {$core_area > 0 ? $sc_area / $core_area * 100.0 : 0.0}]
+
+    puts $fh [format "  Die area         : %10.1f um2" $die_area]
+    puts $fh [format "  Core area        : %10.1f um2" $core_area]
+    puts $fh [format "  Std cell area    : %10.1f um2" $sc_area]
+    puts $fh [format "  Core utilization : %9.2f %%" $util]
+
+    # --- Power ---
+    puts $fh ""
+    puts $fh "POWER (corner tt)"
+    puts $fh $line
+    close $fh
+
+    report_power -corner tt >> $f
+
+    utl::report "Summary written to $f"
+}
+
 # see: https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts/blob/master/flow/scripts/save_images.tcl
 # and: https://github.com/The-OpenROAD-Project/OpenROAD/blob/master/src/gui/README.md
 proc report_image { report_name {full_die false} {place false} {cts false} {routing false} } {

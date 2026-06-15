@@ -110,6 +110,7 @@ detailed_route -output_drc ${report_dir}/04_${proj_name}_route_drc.rpt \
 utl::report "Saving detailed route"
 save_checkpoint 04_${proj_name}.routed
 report_metrics "04_${proj_name}.routed"
+report_summary "04_${proj_name}.routed" "${report_dir}/04_${proj_name}_route_drc.rpt"
 report_image "04_${proj_name}.routed" true false false true
 
 utl::report "###############################################################################"
