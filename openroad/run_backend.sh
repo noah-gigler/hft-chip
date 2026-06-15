@@ -160,6 +160,8 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --all)
+            run_cmd "echo [INFO][OpenROAD] Cleaning previous outputs"
+            run_cmd "rm -rf logs out reports save"
             run_openroad_script "scripts/01_floorplan.tcl"
             run_openroad_script "scripts/02_placement.tcl"
             run_openroad_script "scripts/03_cts.tcl"

@@ -73,6 +73,8 @@ run_cmd() {
 
 
 run_yosys() {
+    run_cmd "echo [INFO][Yosys] Cleaning previous outputs"
+    run_cmd "rm -rf out reports tmp"
     run_cmd "echo [INFO][Yosys] Synthesizing ${TOP_DESIGN}"
     run_cmd "yosys \
         -c scripts/yosys_synthesis.tcl 2>&1 | \
