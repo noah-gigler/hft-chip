@@ -61,6 +61,7 @@ module momentum_trader
             order_side_q  <= Bid;
             order_price_q <= '0;
             order_qty_q   <= '0;
+            position_q    <= '0;
         end else begin
             state_q       <= state_d;
             pending_q     <= pending_d;
@@ -77,10 +78,13 @@ module momentum_trader
         logic [$clog2(N) + QTY_WIDTH - 1:0] asks_sum;   
         logic buy_signal, sell_signal;
         logic signed [$clog2(N)+QTY_WIDTH+1:0] imb;
+        logic signed[$clog2(MAX_POS)+1:0] pos_next;
+        logic [1:0] pend_next;
 
         state_d      = state_q;
-        pending_d    = pending_q;
-        position_d   = position_q;
+        order_side_d  = order_side_q;
+        order_price_d = order_price_q;
+        order_qty_d   = order_qty_q;
         error_d      = error_q | (order_filled_i && pending_q == 0);
 
         // default
@@ -89,43 +93,48 @@ module momentum_trader
         price_o  = '0;
         qty_o    = '0;
         error_o  = error_d;
+        
+        // comupted here to avoid combinational loop
+        pos_next  = position_q;
+        pend_next = pending_q;
+        if (!error_d && order_filled_i) begin
+            pend_next = pending_q - 1'b1;
+            if (filled_side_i == Bid)
+                pos_next = position_q + filled_qty_i;
+            else
+                pos_next = position_q - filled_qty_i;
+        end
+        position_d = pos_next;
+        pending_d  = pend_next;
 
         if (!error_d) begin
-            if (order_filled_i) begin
-                pending_d -= 1'b1;
+            order_side_d  = order_side_q;
+            order_price_d = order_price_q;
+            order_qty_d   = order_qty_q;
 
-                if (filled_side_i == Bid) begin
-                    position_d += filled_qty_i;
-                end else begin 
-                    position_d -= filled_qty_i;
-                end
-            end
-            
             case (state_q)
 
                 IDLE: begin
                     bids_sum = '0;
                     asks_sum = '0;
                     for (int i = 0; i < N; ++i) begin
-                        bids_sum += bid_qtys_i[i]; 
+                        bids_sum += bid_qtys_i[i];
                         asks_sum += ask_qtys_i[i];
                     end
                     imb = signed'({1'b0,bids_sum}) - signed'({1'b0,asks_sum});
 
-                    buy_signal  = (imb >  IMB_THRESHOLD) && (position_d < +MAX_POS) && ask_qtys_i[0] != 0; 
-                    sell_signal = (imb < -IMB_THRESHOLD) && (position_d > -MAX_POS) && bid_qtys_i[0] != 0;
+                    buy_signal  = (imb >  IMB_THRESHOLD) && (pos_next < +MAX_POS) && ask_qtys_i[0] != 0;
+                    sell_signal = (imb < -IMB_THRESHOLD) && (pos_next > -MAX_POS) && bid_qtys_i[0] != 0;
 
-                    if (buy_signal) begin 
+                    if (buy_signal) begin
                         order_side_d = Bid;
                         order_price_d = ask_prices_i[0];
-                        order_qty_d = min3(ORDER_QTY, ask_qtys_i[0], MAX_POS - position_d);
-                        
+                        order_qty_d = min3(ORDER_QTY, ask_qtys_i[0], MAX_POS - pos_next);
                         state_d = TRADE;
                     end else if (sell_signal) begin
                         order_side_d = Ask;
                         order_price_d = bid_prices_i[0];
-                        order_qty_d = min3(ORDER_QTY, bid_qtys_i[0], MAX_POS + position_d);
-
+                        order_qty_d = min3(ORDER_QTY, bid_qtys_i[0], MAX_POS + pos_next);
                         state_d = TRADE;
                     end
                 end
@@ -137,13 +146,13 @@ module momentum_trader
                     qty_o    = order_qty_q;
 
                     if (grant_i) begin
-                        pending_d += 1;
+                        pending_d = pend_next + 1'b1;
                         state_d = WAIT;
                     end
                 end
 
                 WAIT: begin
-                    if (pending_d == 0) begin
+                    if (pend_next == 0) begin
                         state_d = IDLE;
                     end
                 end

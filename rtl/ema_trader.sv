@@ -62,6 +62,7 @@ module ema_trader
             order_side_q  <= Bid;
             order_price_q <= '0;
             order_qty_q   <= '0;
+            position_q <= '0;
         end else begin
             state_q       <= state_d;
             pending_q     <= pending_d;
@@ -81,10 +82,10 @@ module ema_trader
         logic signed [PRICE_WIDTH+1:0] dev; 
         logic both_liquid;
         logic buy_signal, sell_signal;
+        logic signed[$clog2(MAX_POS)+1:0] pos_next;
+        logic [1:0] pend_next;
 
         state_d      = state_q;
-        pending_d    = pending_q;
-        position_d   = position_q;
         error_d      = error_q | (order_filled_i && pending_q == 0);
         ema_d        = ema_q;
         ema_init_d   = ema_init_q;
@@ -113,32 +114,41 @@ module ema_trader
             end
         end
 
+        // comupted here to avoid combinational loop
+        pos_next  = position_q;
+        pend_next = pending_q;
+        if (!error_d && order_filled_i) begin
+            pend_next = pending_q - 1'b1;
+            if (filled_side_i == Bid)
+                pos_next = position_q + filled_qty_i;
+            else
+                pos_next = position_q - filled_qty_i;
+        end
+        position_d = pos_next;
+        pending_d  = pend_next;
+
         if (!error_d) begin
-            if (order_filled_i) begin
-                pending_d -= 1'b1;
-                if (filled_side_i == Bid)
-                    position_d += filled_qty_i;
-                else
-                    position_d -= filled_qty_i;
-            end
+            order_side_d  = order_side_q;
+            order_price_d = order_price_q;
+            order_qty_d   = order_qty_q;
 
             case (state_q)
 
                 IDLE: begin
                     dev = signed'((mid_scaled - ema_d) >>> EMA_SHIFT);
 
-                    buy_signal = ema_init_q && both_liquid && (dev < -DEV_THRESHOLD) && (position_d < MAX_POS);
-                    sell_signal = ema_init_q && both_liquid && (dev > DEV_THRESHOLD) && (position_d > -MAX_POS);
+                    buy_signal = ema_init_q && both_liquid && (dev < -DEV_THRESHOLD) && (pos_next < MAX_POS);
+                    sell_signal = ema_init_q && both_liquid && (dev > DEV_THRESHOLD)  && (pos_next > -MAX_POS);
 
                     if (buy_signal) begin
                         order_side_d  = Bid;
                         order_price_d = ask_prices_i[0];
-                        order_qty_d   = min3(ORDER_QTY, ask_qtys_i[0], MAX_POS - position_d);
+                        order_qty_d   = min3(ORDER_QTY, ask_qtys_i[0], MAX_POS - pos_next);
                         state_d       = TRADE;
                     end else if (sell_signal) begin
-                        order_side_d  = Ask; 
+                        order_side_d  = Ask;
                         order_price_d = bid_prices_i[0];
-                        order_qty_d   = min3(ORDER_QTY, bid_qtys_i[0], MAX_POS + position_d);
+                        order_qty_d   = min3(ORDER_QTY, bid_qtys_i[0], MAX_POS + pos_next);
                         state_d       = TRADE;
                     end
                 end
@@ -150,13 +160,13 @@ module ema_trader
                     qty_o   = order_qty_q;
 
                     if (grant_i) begin
-                        pending_d += 1;
+                        pending_d = pend_next + 1'b1;
                         state_d = WAIT;
                     end
                 end
 
                 WAIT: begin
-                    if (pending_d == 0) begin
+                    if (pend_next == 0) begin
                         state_d = IDLE;
                     end
                 end

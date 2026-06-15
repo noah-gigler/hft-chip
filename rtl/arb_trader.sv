@@ -81,6 +81,8 @@ module arb_trader
 
     always_comb begin
         logic arb0, arb1;
+        logic [1:0] pend_next;
+        logic signed[2*QTY_WIDTH-1:0] res_next;
 
         state_d      = state_q;
         ask_price_d  = ask_price_q;
@@ -88,8 +90,6 @@ module arb_trader
         arb_qty_d    = arb_qty_q;
         ask_market_d = ask_market_q;
         bid_market_d = bid_market_q;
-        pending_d    = pending_q;
-        residual_d   = residual_q;
         error_d      = error_q | (order_filled_i && pending_q == 0);
 
         // default
@@ -100,31 +100,40 @@ module arb_trader
         qty_o    = '0;
         error_o  = error_d;
 
-        if (!error_d) begin
-            if (order_filled_i) begin
-                pending_d -= 1'b1;
+        // comupted here to avoid combinational loop
+        pend_next = pending_q;
+        res_next  = residual_q;
+        if (!error_d && order_filled_i) begin
+            pend_next = pending_q - 1'b1;
+            if (filled_side_i == Bid)
+                res_next = residual_q + signed'({1'b0, filled_qty_i});
+            else
+                res_next = residual_q - signed'({1'b0, filled_qty_i});
+        end
+        pending_d  = pend_next;
+        residual_d = res_next;
 
-                if (filled_side_i == Bid) begin
-                    residual_d += filled_qty_i;
-                end else begin 
-                    residual_d -= filled_qty_i;
-                end
-            end
-            
+        if (!error_d) begin
+            ask_price_d  = ask_price_q;
+            bid_price_d  = bid_price_q;
+            arb_qty_d    = arb_qty_q;
+            ask_market_d = ask_market_q;
+            bid_market_d = bid_market_q;
+
             case (state_q)
 
                 IDLE: begin
                     arb0 = bid_qtys0_i[0] > 0 && ask_qtys1_i[0] > 0 && (bid_prices0_i[0] > ask_prices1_i[0] + ARB_THRESHOLD);
                     arb1 = bid_qtys1_i[0] > 0 && ask_qtys0_i[0] > 0 && (bid_prices1_i[0] > ask_prices0_i[0] + ARB_THRESHOLD);
 
-                    if (arb0) begin 
+                    if (arb0) begin
                         ask_market_d = '0;
                         bid_market_d = '1;
 
                         ask_price_d  = bid_prices0_i[0];
                         bid_price_d  = ask_prices1_i[0];
                         arb_qty_d    = (bid_qtys0_i[0] < ask_qtys1_i[0]) ? bid_qtys0_i[0] : ask_qtys1_i[0];
-                        
+
                         state_d      = TRADE1;
                     end else if (arb1) begin
                         ask_market_d = '1;
@@ -145,7 +154,7 @@ module arb_trader
                     price_o  = ask_price_q;
                     qty_o    = arb_qty_q;
 
-                    pending_d += 1;
+                    pending_d = pend_next + 1'b1;
                     state_d  = TRADE2;
                 end
 
@@ -156,7 +165,7 @@ module arb_trader
                     price_o  = bid_price_q;
                     qty_o    = arb_qty_q;
 
-                    pending_d += 1;
+                    pending_d = pend_next + 1'b1;
                     state_d  = FLATTEN;
                 end
 
@@ -172,7 +181,7 @@ module arb_trader
                             logic   liquid0, liquid1, market;
 
                             sell = (residual_q > 0);
-                            res_qty = sell ? residual_q : (-residual_q); // value will be truncated 
+                            res_qty = sell ? residual_q : (-residual_q); // value will be truncated
 
                             price0    = sell ? bid_prices0_i[0] : ask_prices0_i[0];
                             price1    = sell ? bid_prices1_i[0] : ask_prices1_i[0];
@@ -186,9 +195,9 @@ module arb_trader
                             if (liquid0 && liquid1)
                                 market = sell ? (price1 > price0) : (price1 < price0);
                             else if (liquid1)
-                                market = 1'b1;  
+                                market = 1'b1;
                             else
-                                market = 1'b0;  
+                                market = 1'b0;
 
                             if (liquid0 || liquid1) begin
                                 valid_o   = 1'b1;
@@ -196,7 +205,7 @@ module arb_trader
                                 side_o    = sell ? Ask : Bid;
                                 price_o   = market ? price1 : price0;
                                 qty_o     = res_qty;
-                                pending_d = pending_d + 1'b1;
+                                pending_d = pend_next + 1'b1;
                             end else begin
                                 valid_o = 1'b0;   // no liquidity
                             end
