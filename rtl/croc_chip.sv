@@ -124,7 +124,7 @@ module croc_chip import orderbook_pkg::*; #() (
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio2 ();
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio3 ();
 
-  localparam int N = 8;
+  localparam int N = 32;
   assign out_spare0 = 1'b0;
 
   price_t [N-1:0] bid_prices0;
@@ -146,6 +146,51 @@ module croc_chip import orderbook_pkg::*; #() (
   qty_t   [N-1:0] bid_qtys3;
   price_t [N-1:0] ask_prices3;
   qty_t   [N-1:0] ask_qtys3;
+
+  // registered copies — break the wide N×(P+Q) bus wires off the critical path
+  // and give the router a proper driving cell midway between orderbooks and traders
+  price_t [N-1:0] bid_prices0_q, bid_prices1_q, bid_prices2_q, bid_prices3_q;
+  qty_t   [N-1:0] bid_qtys0_q,  bid_qtys1_q,  bid_qtys2_q,  bid_qtys3_q;
+  price_t [N-1:0] ask_prices0_q, ask_prices1_q, ask_prices2_q, ask_prices3_q;
+  qty_t   [N-1:0] ask_qtys0_q,  ask_qtys1_q,  ask_qtys2_q,  ask_qtys3_q;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      bid_prices0_q <= '0; 
+      bid_qtys0_q   <= '0; 
+      ask_prices0_q <= '0; 
+      ask_qtys0_q   <= '0;
+      bid_prices1_q <= '0; 
+      bid_qtys1_q   <= '0; 
+      ask_prices1_q <= '0; 
+      ask_qtys1_q   <= '0;
+      bid_prices2_q <= '0; 
+      bid_qtys2_q   <= '0; 
+      ask_prices2_q <= '0; 
+      ask_qtys2_q   <= '0;
+      bid_prices3_q <= '0; 
+      bid_qtys3_q   <= '0; 
+      ask_prices3_q <= '0; 
+      ask_qtys3_q   <= '0;
+    end else begin
+      bid_prices0_q <= bid_prices0; 
+      bid_qtys0_q   <= bid_qtys0; 
+      ask_prices0_q <= ask_prices0; 
+      ask_qtys0_q   <= ask_qtys0;
+      bid_prices1_q <= bid_prices1; 
+      bid_qtys1_q   <= bid_qtys1; 
+      ask_prices1_q <= ask_prices1; 
+      ask_qtys1_q   <= ask_qtys1;
+      bid_prices2_q <= bid_prices2; 
+      bid_qtys2_q   <= bid_qtys2; 
+      ask_prices2_q <= ask_prices2; 
+      ask_qtys2_q   <= ask_qtys2;
+      bid_prices3_q <= bid_prices3; 
+      bid_qtys3_q   <= bid_qtys3; 
+      ask_prices3_q <= ask_prices3; 
+      ask_qtys3_q   <= ask_qtys3;
+    end
+  end
 
   logic error0, error1, error2, error3, error4, error5, error6;
   logic valid_ob0, valid_ob1, valid_ob2, valid_ob3, valid_trader0, valid_trader1, valid_trader2;
@@ -276,15 +321,15 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .bid_prices0_i (bid_prices0),
-    .bid_qtys0_i   (bid_qtys0),
-    .ask_prices0_i (ask_prices0),
-    .ask_qtys0_i   (ask_qtys0),
+    .bid_prices0_i (bid_prices0_q),
+    .bid_qtys0_i   (bid_qtys0_q),
+    .ask_prices0_i (ask_prices0_q),
+    .ask_qtys0_i   (ask_qtys0_q),
 
-    .bid_prices1_i (bid_prices1),
-    .bid_qtys1_i   (bid_qtys1),
-    .ask_prices1_i (ask_prices1),
-    .ask_qtys1_i   (ask_qtys1),
+    .bid_prices1_i (bid_prices1_q),
+    .bid_qtys1_i   (bid_qtys1_q),
+    .ask_prices1_i (ask_prices1_q),
+    .ask_qtys1_i   (ask_qtys1_q),
 
     .order_filled_i (valid_trader0),
     .filled_price_i (in_price),
@@ -303,10 +348,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .bid_prices_i (bid_prices2),
-    .bid_qtys_i   (bid_qtys2),
-    .ask_prices_i (ask_prices2),
-    .ask_qtys_i   (ask_qtys2),
+    .bid_prices_i (bid_prices2_q),
+    .bid_qtys_i   (bid_qtys2_q),
+    .ask_prices_i (ask_prices2_q),
+    .ask_qtys_i   (ask_qtys2_q),
 
     .order_filled_i (valid_trader1),
     .filled_price_i (in_price),
@@ -326,10 +371,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .bid_prices_i (bid_prices3),
-    .bid_qtys_i   (bid_qtys3),
-    .ask_prices_i (ask_prices3),
-    .ask_qtys_i   (ask_qtys3),
+    .bid_prices_i (bid_prices3_q),
+    .bid_qtys_i   (bid_qtys3_q),
+    .ask_prices_i (ask_prices3_q),
+    .ask_qtys_i   (ask_qtys3_q),
 
     .order_filled_i (valid_trader2),
     .filled_price_i (in_price),
