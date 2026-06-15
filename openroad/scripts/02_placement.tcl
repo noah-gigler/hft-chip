@@ -86,16 +86,17 @@ utl::report "Repair design"
 repair_design -verbose
 save_checkpoint 02-02_${proj_name}.gpl1_fix
 
-utl::report "Repair setup"
-repair_timing -setup -verbose
-save_checkpoint 02-02_${proj_name}.gpl1_repaired
-
-# Actual global placement with routability and timing driven
+# WARNING: repair_timing after timing-driven placement to avoid dbModITerm null bug
 utl::report "Global Placement (2)"
 global_placement -density 0.60 \
                  -routability_driven \
                  -routability_check_overflow 0.30 \
                  -timing_driven
+save_checkpoint 02-02_${proj_name}.gpl2_pre_repair
+
+utl::report "Repair setup"
+repair_timing -setup -verbose
+save_checkpoint 02-02_${proj_name}.gpl1_repaired
 report_metrics "02-02_${proj_name}.gpl2"
 report_image "02-02_${proj_name}.gpl2" true true
 save_checkpoint 02-02_${proj_name}.gpl2
