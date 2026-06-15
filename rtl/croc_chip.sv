@@ -36,14 +36,15 @@ module croc_chip import orderbook_pkg::*; #() (
   wire [PRICE_WIDTH-1:0] in_price;
   wire [QTY_WIDTH-1:0] in_qty;
   
-  wire out_valid;
-  wire [1:0] out_market;
-  wire out_side;
-  wire [PRICE_WIDTH-1:0] out_price;
-  wire [QTY_WIDTH-1:0] out_qty;
+  // changed wire to logic due to pipleine
+  logic out_valid;
+  logic [1:0] out_market;
+  logic out_side;
+  logic [PRICE_WIDTH-1:0] out_price;
+  logic [QTY_WIDTH-1:0] out_qty;
 
-  wire out_error;
-  wire out_spare0;
+  logic out_error;
+  logic out_spare0;
 
   (* dont_touch = "true" *) sg13cmos5l_IOPadIn pad_clk_i  (.pad(clk_i),  .p2c(clk));
   (* dont_touch = "true" *) sg13cmos5l_IOPadIn pad_rst_ni (.pad(rst_ni), .p2c(rst_n));
@@ -160,13 +161,33 @@ module croc_chip import orderbook_pkg::*; #() (
   assign grant_mom = valid_mom & ~valid_arb;
   assign grant_ema = valid_ema & ~valid_arb & ~valid_mom;
 
-  assign out_valid  = valid_arb | valid_mom | valid_ema;
-  assign out_market = valid_arb ? {1'b0, market_arb} : valid_mom ? 2'd2 : 2'd3;
-  assign out_side   = valid_arb ? side_arb : valid_mom ? side_mom : side_ema;
-  assign out_price  = valid_arb ? price_arb : valid_mom ? price_mom : price_ema;
-  assign out_qty    = valid_arb ? qty_arb : valid_mom ? qty_mom : qty_ema;
+  // assign out_valid  = valid_arb | valid_mom | valid_ema;
+  // assign out_market = valid_arb ? {1'b0, market_arb} : valid_mom ? 2'd2 : 2'd3;
+  // assign out_side   = valid_arb ? side_arb : valid_mom ? side_mom : side_ema;
+  // assign out_price  = valid_arb ? price_arb : valid_mom ? price_mom : price_ema;
+  // assign out_qty    = valid_arb ? qty_arb : valid_mom ? qty_mom : qty_ema;
 
-  assign out_error = error0 | error1 | error2 | error3 | error4 | error5 | error6;
+  // assign out_error = error0 | error1 | error2 | error3 | error4 | error5 | error6;
+
+  // output pad very slow so add pipeline
+  always_ff @(posedge clk or negedge rst_n) begin
+      if (!rst_n) begin
+          out_valid  <= '0;
+          out_market <= '0;
+          out_side   <= Bid;
+          out_price  <= '0;
+          out_qty    <= '0;
+          out_error  <= '0;
+          out_spare0 <= '0;
+      end else begin
+          out_valid  <= valid_arb | valid_mom | valid_ema;
+          out_market <= valid_arb ? {1'b0, market_arb} : valid_mom ? 2'd2 : 2'd3;
+          out_side   <= valid_arb ? side_arb : valid_mom ? side_mom : side_ema;
+          out_price  <= valid_arb ? price_arb : valid_mom ? price_mom : price_ema;
+          out_qty    <= valid_arb ? qty_arb   : valid_mom ? qty_mom   : qty_ema;
+          out_error  <= error0 | error1 | error2 | error3 | error4 | error5 | error6;
+      end
+  end
 
   assign valid_ob0 = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 0);
   assign valid_ob1 = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 1);
