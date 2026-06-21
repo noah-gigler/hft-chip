@@ -126,9 +126,8 @@ module orderbook
                         end
                         new_prices[cmp_idx] = price_i;
                         new_qtys[cmp_idx]   = qty_i;
-                    end else begin
-                        error_d = 1'b1;
                     end
+                    // else: price outside top-N tracked levels — silently drop
                     Remove: if (any_eq && cur_qtys[eq_idx] >= qty_i) begin
                         if (cur_qtys[eq_idx] == qty_i) begin
                             for (int i = 0; i < N-1; i++) begin
