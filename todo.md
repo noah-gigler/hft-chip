@@ -1,0 +1,5 @@
+- Write a spec! And derive RTL and TB independently from this!
+  - There is no spec. So unclear behavior. Bad.
+  - Currently TB is derived from RTL. Of course it matches! Bad.
+- Direct testing using hand-crafted inputs (and outputs?).
+- Run SW on croc and compare runtime.
