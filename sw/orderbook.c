@@ -31,7 +31,7 @@ void orderbook_update(orderbook_t *ob, ob_op_t op, ob_side_t side, price_t price
     int  eq_idx = 0;
 
     for (int i = 0; i < ORDERBOOK_N; i++) {
-        equals[i]   = (prices[i] == price);
+        equals[i]   = (qtys[i] != 0) && (prices[i] == price);
         compares[i] = (side == Bid) ? (price > prices[i]) : (price < prices[i]);
         if (equals[i]) { any_eq = true; eq_idx = i; eq_count++; }
     }

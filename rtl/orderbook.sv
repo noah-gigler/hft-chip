@@ -96,7 +96,7 @@ module orderbook
         if (valid_i && !error_q) begin
 
             for (int i = 0; i < N; i++) begin
-                equals[i] = cur_prices[i] == price_i;
+                equals[i] = (cur_qtys[i] != 0) && (cur_prices[i] == price_i);
                 compares[i] = (side_i == Bid) ? (price_i > cur_prices[i]) : (price_i < cur_prices[i]);
             end
 
