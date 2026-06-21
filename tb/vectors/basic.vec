@@ -1,0 +1,25 @@
+# Basic directed tests — sorted insert, accumulate, partial/full remove, both sides.
+# Expected behaviour noted per line; the golden model is the live oracle.
+
+reset
+
+# bids sort descending: best (highest price) at index 0
+insert bid 100 10        # book: [100/10]
+insert bid 120 5         # new best -> [120/5, 100/10]
+insert bid 110 8         # middle  -> [120/5, 110/8, 100/10]
+
+# same price accumulates qty
+insert bid 100 3         # 100 -> qty 13
+
+# partial then full remove of a level (full remove shifts levels up)
+remove bid 110 3         # 110 -> qty 5
+remove bid 110 5         # 110 removed -> [120/5, 100/13]
+
+# ask side sorts ascending: best (lowest price) at index 0
+insert ask 200 20        # [200/20]
+insert ask 180 15        # new best -> [180/15, 200/20]
+insert ask 190 10        # middle   -> [180/15, 190/10, 200/20]
+remove ask 200 20        # -> [180/15, 190/10]
+
+# hold: valid=0 must leave state untouched
+nop

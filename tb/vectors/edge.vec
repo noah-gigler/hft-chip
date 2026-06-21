@@ -1,0 +1,50 @@
+# Edge cases — full-book eviction, out-of-range drop, qty overflow, error latch+hold.
+
+# --- out-of-range insert on a full book is silently dropped (no error) ---
+reset
+insert bid 32 1          # fill 32 bid levels with prices 32..1
+insert bid 31 1
+insert bid 30 1
+insert bid 29 1
+insert bid 28 1
+insert bid 27 1
+insert bid 26 1
+insert bid 25 1
+insert bid 24 1
+insert bid 23 1
+insert bid 22 1
+insert bid 21 1
+insert bid 20 1
+insert bid 19 1
+insert bid 18 1
+insert bid 17 1
+insert bid 16 1
+insert bid 15 1
+insert bid 14 1
+insert bid 13 1
+insert bid 12 1
+insert bid 11 1
+insert bid 10 1
+insert bid 9 1
+insert bid 8 1
+insert bid 7 1
+insert bid 6 1
+insert bid 5 1
+insert bid 4 1
+insert bid 3 1
+insert bid 2 1
+insert bid 1 1           # book full: bids [32..1]
+insert bid 100 1         # 100 > every tracked bid -> new best, evicts worst level (1)
+insert bid 0 1           # 0 is worse than every tracked bid on a full book -> drop, no error
+
+# --- qty overflow latches error ---
+reset
+insert bid 100 200
+insert bid 100 200       # 400 > QTY_MAX(255) -> error
+
+# --- error latches and HOLDS: once error is set the book freezes ---
+reset
+insert ask 300 5
+remove ask 400 1         # remove nonexistent -> error
+insert ask 300 5         # ignored while error high; state must stay frozen
+nop                      # still frozen

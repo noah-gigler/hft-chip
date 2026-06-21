@@ -5,13 +5,17 @@ OBJ       := obj_dir
 
 VERILATOR := verilator
 
-.PHONY: all sim clean
+# random run knobs (override: make sim SEED=2 NOPS=1000000)
+SEED ?= 1
+NOPS ?= 100000
+
+.PHONY: all sim vectors random clean
 
 all: sim
 
 $(OBJ)/Vorderbook: $(RTL)/orderbook_pkg.sv $(RTL)/orderbook.sv \
                    tb_orderbook.cpp $(SW)/orderbook.c $(SW)/orderbook.h
-	$(VERILATOR) --cc --exe --build \
+	$(VERILATOR) --cc --exe --build --trace \
 		-Mdir $(OBJ) \
 		--top-module orderbook \
 		-GN=32 \
@@ -21,8 +25,14 @@ $(OBJ)/Vorderbook: $(RTL)/orderbook_pkg.sv $(RTL)/orderbook.sv \
 		tb_orderbook.cpp \
 		$(SW)/orderbook.c
 
-sim: $(OBJ)/Vorderbook
-	$(OBJ)/Vorderbook
+# directed vector files + constrained-random run
+sim: vectors random
+
+vectors: $(OBJ)/Vorderbook
+	$(OBJ)/Vorderbook --vectors vectors/basic.vec vectors/edge.vec
+
+random: $(OBJ)/Vorderbook
+	$(OBJ)/Vorderbook --random $(SEED) $(NOPS)
 
 clean:
 	rm -rf $(OBJ)
