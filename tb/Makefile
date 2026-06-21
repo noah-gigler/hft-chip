@@ -1,6 +1,6 @@
 REPO_ROOT := $(shell git -C .. rev-parse --show-toplevel)
 RTL       := $(REPO_ROOT)/rtl
-SW        := $(REPO_ROOT)/sw/hft
+SW        := $(REPO_ROOT)/sw
 OBJ       := obj_dir
 
 VERILATOR := verilator
@@ -13,9 +13,9 @@ NOPS ?= 100000
 
 PKG     := $(RTL)/orderbook_pkg.sv
 TRADERS := $(RTL)/arb_trader.sv $(RTL)/momentum_trader.sv $(RTL)/ema_trader.sv
-# all C golden models live in sw/hft, sharing common.h
-MODELS  := $(SW)/orderbook.c $(SW)/arb_trader_model.c \
-           $(SW)/momentum_trader_model.c $(SW)/ema_trader_model.c
+# all C golden models live in sw/, sharing common.h
+MODELS  := $(SW)/orderbook.c $(SW)/arb_trader.c \
+           $(SW)/momentum_trader.c $(SW)/ema_trader.c
 
 .PHONY: all sim orderbook arb momentum ema chip vectors random clean
 
@@ -36,28 +36,28 @@ random: $(OBJ)/Vorderbook
 	$(OBJ)/Vorderbook --random $(SEED) $(NOPS)
 
 # ---------------- arb_trader ----------------
-$(OBJ)/Varb_trader: $(RTL)/arb_trader.sv tb_arb_trader.cpp $(SW)/arb_trader_model.c $(SW)/common.h $(PKG)
+$(OBJ)/Varb_trader: $(RTL)/arb_trader.sv tb_arb_trader.cpp $(SW)/arb_trader.c $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
 		--top-module arb_trader -GN=32 -CFLAGS "-I$(SW)" \
-		$(PKG) $(RTL)/arb_trader.sv tb_arb_trader.cpp $(SW)/arb_trader_model.c
+		$(PKG) $(RTL)/arb_trader.sv tb_arb_trader.cpp $(SW)/arb_trader.c
 
 arb: $(OBJ)/Varb_trader
 	$(OBJ)/Varb_trader --random $(SEED) $(NOPS)
 
 # ---------------- momentum_trader ----------------
-$(OBJ)/Vmomentum_trader: $(RTL)/momentum_trader.sv tb_momentum_trader.cpp $(SW)/momentum_trader_model.c $(SW)/common.h $(PKG)
+$(OBJ)/Vmomentum_trader: $(RTL)/momentum_trader.sv tb_momentum_trader.cpp $(SW)/momentum_trader.c $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
 		--top-module momentum_trader -GN=32 -CFLAGS "-I$(SW)" \
-		$(PKG) $(RTL)/momentum_trader.sv tb_momentum_trader.cpp $(SW)/momentum_trader_model.c
+		$(PKG) $(RTL)/momentum_trader.sv tb_momentum_trader.cpp $(SW)/momentum_trader.c
 
 momentum: $(OBJ)/Vmomentum_trader
 	$(OBJ)/Vmomentum_trader --random $(SEED) $(NOPS)
 
 # ---------------- ema_trader ----------------
-$(OBJ)/Vema_trader: $(RTL)/ema_trader.sv tb_ema_trader.cpp $(SW)/ema_trader_model.c $(SW)/common.h $(PKG)
+$(OBJ)/Vema_trader: $(RTL)/ema_trader.sv tb_ema_trader.cpp $(SW)/ema_trader.c $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
 		--top-module ema_trader -GN=32 -CFLAGS "-I$(SW)" \
-		$(PKG) $(RTL)/ema_trader.sv tb_ema_trader.cpp $(SW)/ema_trader_model.c
+		$(PKG) $(RTL)/ema_trader.sv tb_ema_trader.cpp $(SW)/ema_trader.c
 
 ema: $(OBJ)/Vema_trader
 	$(OBJ)/Vema_trader --random $(SEED) $(NOPS)

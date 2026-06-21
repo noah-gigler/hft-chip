@@ -1,4 +1,4 @@
-#include "momentum_trader_model.h"
+#include "momentum_trader.h"
 
 // sign-extend to the RTL's signed[$clog2(MAX_POS)+1:0] width.
 // MAX_POS=256 -> $clog2=8 -> bits [9:0] -> 10-bit signed.

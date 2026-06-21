@@ -1,4 +1,4 @@
-#include "ema_trader_model.h"
+#include "ema_trader.h"
 
 static int16_t sext14(int v) {
     unsigned u = (unsigned)v & 0x3FFFu;

@@ -6,7 +6,7 @@
 #include "Vmomentum_trader.h"
 #include "verilated.h"
 #include "verilated_vcd_c.h"
-#include "momentum_trader_model.h"
+#include "momentum_trader.h"
 
 // momentum_trader unit TB. Full-depth book drives the registered qty sums;
 // compare every cycle against the cycle-accurate golden model.

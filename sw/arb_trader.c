@@ -1,4 +1,4 @@
-#include "arb_trader_model.h"
+#include "arb_trader.h"
 
 void arb_init(arb_model_t *m) {
     m->state = ARB_IDLE;

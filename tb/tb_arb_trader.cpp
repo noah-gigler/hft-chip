@@ -6,7 +6,7 @@
 #include "Varb_trader.h"
 #include "verilated.h"
 #include "verilated_vcd_c.h"
-#include "arb_trader_model.h"
+#include "arb_trader.h"
 
 // arb_trader unit TB: drive both order-book buses + the private fill feed,
 // compare every cycle against the cycle-accurate golden model (arb_trader_model).

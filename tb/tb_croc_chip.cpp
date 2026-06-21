@@ -7,9 +7,9 @@
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 #include "orderbook.h"
-#include "arb_trader_model.h"
-#include "momentum_trader_model.h"
-#include "ema_trader_model.h"
+#include "arb_trader.h"
+#include "momentum_trader.h"
+#include "ema_trader.h"
 
 // Whole-chip TB. A cycle-accurate composite golden model reproduces the chip
 // datapath: 4 orderbooks (orderbook.c) -> 1-cycle registered copies -> 3 traders
