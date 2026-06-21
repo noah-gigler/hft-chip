@@ -14,7 +14,7 @@ $(OBJ)/Vorderbook: $(RTL)/orderbook_pkg.sv $(RTL)/orderbook.sv \
 	$(VERILATOR) --cc --exe --build \
 		-Mdir $(OBJ) \
 		--top-module orderbook \
-		-pvalue+orderbook.N=32 \
+		-GN=32 \
 		-CFLAGS "-I$(SW)" \
 		$(RTL)/orderbook_pkg.sv \
 		$(RTL)/orderbook.sv \

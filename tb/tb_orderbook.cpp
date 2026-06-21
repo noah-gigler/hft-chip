@@ -3,9 +3,7 @@
 #include <cstring>
 #include "Vorderbook.h"
 #include "verilated.h"
-extern "C" {
 #include "orderbook.h"
-}
 
 static int g_errors = 0;
 static int g_checks = 0;
