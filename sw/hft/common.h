@@ -1,6 +1,6 @@
 #pragma once
-// Shared golden-model definitions for the HFT chip trader/orderbook references.
-// Mirrors rtl/orderbook_pkg.sv — single source of truth for the C side.
+// Single source of truth for the C golden models (orderbook + traders).
+// Mirrors rtl/orderbook_pkg.sv.
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -26,6 +26,17 @@ typedef struct {
     price_t ask_prices[N];
     qty_t   ask_qtys[N];
 } book_t;
+
+// One trade-output bus sample (combinational outputs of a trader). `market` is
+// only meaningful for arb_trader.
+typedef struct {
+    bool      valid;
+    bool      market;
+    ob_side_t side;
+    price_t   price;
+    qty_t     qty;
+    bool      error;
+} trade_out_t;
 
 // min of three ints, truncated to qty_t — mirrors orderbook_pkg::min3.
 static inline qty_t min3(int a, int b, int c) {

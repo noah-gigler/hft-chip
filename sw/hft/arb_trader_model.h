@@ -14,16 +14,6 @@ typedef struct {
     bool    error;
 } arb_model_t;
 
-// One trade-output bus sample (combinational outputs of the trader).
-typedef struct {
-    bool      valid;
-    bool      market;
-    ob_side_t side;
-    price_t   price;
-    qty_t     qty;
-    bool      error;
-} trade_out_t;
-
 void arb_init(arb_model_t *m);
 
 // Compute combinational outputs for the CURRENT state/inputs, then advance the

@@ -1,7 +1,6 @@
 #pragma once
 // Cycle-accurate golden model of rtl/ema_trader.sv.
 #include "common.h"
-#include "arb_trader_model.h"   // reuse trade_out_t
 
 #define EMA_SHIFT      4
 #define EMA_DEV_THRESH 4

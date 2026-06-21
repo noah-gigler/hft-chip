@@ -1,7 +1,6 @@
 #pragma once
 // Cycle-accurate golden model of rtl/momentum_trader.sv.
 #include "common.h"
-#include "arb_trader_model.h"   // reuse trade_out_t
 
 #define MOM_IMB_THRESHOLD 2
 #define MOM_ORDER_QTY     32

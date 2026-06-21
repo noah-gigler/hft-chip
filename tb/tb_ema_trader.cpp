@@ -6,7 +6,7 @@
 #include "Vema_trader.h"
 #include "verilated.h"
 #include "verilated_vcd_c.h"
-#include "model/ema_trader_model.h"
+#include "ema_trader_model.h"
 
 // ema_trader unit TB. Top-of-book mid feeds the recursive EMA filter; compare
 // every cycle against the cycle-accurate golden model.
