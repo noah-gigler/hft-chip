@@ -156,21 +156,22 @@ module croc_chip import orderbook_pkg::*; #() (
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      bid_prices0_q <= '0; 
-      bid_qtys0_q   <= '0; 
-      ask_prices0_q <= '0; 
+      // match orderbook reset: empty book has bids at DEFAULT_BID, asks at DEFAULT_ASK
+      bid_prices0_q <= {N{DEFAULT_BID}};
+      bid_qtys0_q   <= '0;
+      ask_prices0_q <= {N{DEFAULT_ASK}};
       ask_qtys0_q   <= '0;
-      bid_prices1_q <= '0; 
-      bid_qtys1_q   <= '0; 
-      ask_prices1_q <= '0; 
+      bid_prices1_q <= {N{DEFAULT_BID}};
+      bid_qtys1_q   <= '0;
+      ask_prices1_q <= {N{DEFAULT_ASK}};
       ask_qtys1_q   <= '0;
-      bid_prices2_q <= '0; 
-      bid_qtys2_q   <= '0; 
-      ask_prices2_q <= '0; 
+      bid_prices2_q <= {N{DEFAULT_BID}};
+      bid_qtys2_q   <= '0;
+      ask_prices2_q <= {N{DEFAULT_ASK}};
       ask_qtys2_q   <= '0;
-      bid_prices3_q <= '0; 
-      bid_qtys3_q   <= '0; 
-      ask_prices3_q <= '0; 
+      bid_prices3_q <= {N{DEFAULT_BID}};
+      bid_qtys3_q   <= '0;
+      ask_prices3_q <= {N{DEFAULT_ASK}};
       ask_qtys3_q   <= '0;
     end else begin
       bid_prices0_q <= bid_prices0; 
@@ -223,7 +224,7 @@ module croc_chip import orderbook_pkg::*; #() (
           out_price  <= '0;
           out_qty    <= '0;
           out_error  <= '0;
-          out_spare0 <= '0;
+          // out_spare0 is driven by a continuous assign below
       end else begin
           out_valid  <= valid_arb | valid_mom | valid_ema;
           out_market <= valid_arb ? {1'b0, market_arb} : valid_mom ? 2'd2 : 2'd3;

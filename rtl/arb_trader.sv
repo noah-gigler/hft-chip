@@ -84,6 +84,25 @@ module arb_trader
         logic [1:0] pend_next;
         logic signed[2*QTY_WIDTH-1:0] res_next;
 
+        // FLATTEN temporaries — declared and defaulted here so no latch is inferred
+        logic                 sell;
+        logic [QTY_WIDTH-1:0] res_qty;
+        price_t               price0, price1;
+        qty_t                 quantity0, quantity1;
+        logic                 liquid0, liquid1, market;
+
+        arb0      = 1'b0;
+        arb1      = 1'b0;
+        sell      = 1'b0;
+        res_qty   = '0;
+        price0    = '0;
+        price1    = '0;
+        quantity0 = '0;
+        quantity1 = '0;
+        liquid0   = 1'b0;
+        liquid1   = 1'b0;
+        market    = 1'b0;
+
         state_d      = state_q;
         ask_price_d  = ask_price_q;
         bid_price_d  = bid_price_q;
@@ -174,12 +193,6 @@ module arb_trader
                         if (residual_q == 0) begin // changed to q (adds latency but stablizes signal)
                             state_d = IDLE;
                         end else begin
-                            logic sell;
-                            logic [QTY_WIDTH-1:0] res_qty;
-                            price_t price0, price1;
-                            qty_t   quantity0, quantity1;
-                            logic   liquid0, liquid1, market;
-
                             sell = (residual_q > 0);
                             res_qty = sell ? residual_q : (-residual_q); // value will be truncated
 
