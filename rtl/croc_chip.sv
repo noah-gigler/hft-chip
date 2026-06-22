@@ -124,7 +124,7 @@ module croc_chip import orderbook_pkg::*; #() (
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio2 ();
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio3 ();
 
-  localparam int N = 32;
+  localparam int N = 64;
   assign out_spare0 = 1'b0;
 
   // full-depth orderbook outputs (the books are maintained at full depth, but
