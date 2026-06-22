@@ -283,7 +283,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .error_o      (error_ob[3])
   );
 
-  arb_trader #(.N(N)) arb_trader_i (
+  arb_trader arb_trader_i (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
@@ -335,7 +335,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .error_o  (error_trader[1])
   );
 
-  ema_trader #(.N(N)) ema_trader_i (
+  ema_trader ema_trader_i (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 

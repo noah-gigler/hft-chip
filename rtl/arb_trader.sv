@@ -1,7 +1,6 @@
 module arb_trader
     import orderbook_pkg::*;
 #(
-    parameter int N = 8,
     parameter int ARB_THRESHOLD = 2
 )(
     input  logic           clk_i,

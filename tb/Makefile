@@ -38,7 +38,7 @@ random: $(OBJ)/Vorderbook
 # ---------------- arb_trader ----------------
 $(OBJ)/Varb_trader: $(RTL)/arb_trader.sv tb_arb_trader.cpp $(SW)/arb_trader.c $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module arb_trader -GN=32 -CFLAGS "-I$(SW)" \
+		--top-module arb_trader -CFLAGS "-I$(SW)" \
 		$(PKG) $(RTL)/arb_trader.sv tb_arb_trader.cpp $(SW)/arb_trader.c
 
 arb: $(OBJ)/Varb_trader
@@ -56,7 +56,7 @@ momentum: $(OBJ)/Vmomentum_trader
 # ---------------- ema_trader ----------------
 $(OBJ)/Vema_trader: $(RTL)/ema_trader.sv tb_ema_trader.cpp $(SW)/ema_trader.c $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module ema_trader -GN=32 -CFLAGS "-I$(SW)" \
+		--top-module ema_trader -CFLAGS "-I$(SW)" \
 		$(PKG) $(RTL)/ema_trader.sv tb_ema_trader.cpp $(SW)/ema_trader.c
 
 ema: $(OBJ)/Vema_trader

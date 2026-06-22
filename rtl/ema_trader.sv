@@ -1,8 +1,7 @@
 module ema_trader
     import orderbook_pkg::*;
 #(
-    parameter int N         = 8,
-    parameter int EMA_SHIFT = 4, 
+    parameter int EMA_SHIFT = 4,
     parameter int DEV_THRESHOLD = 4,   
     parameter int ORDER_QTY = 32,
     parameter int MAX_POS   = 8*ORDER_QTY
