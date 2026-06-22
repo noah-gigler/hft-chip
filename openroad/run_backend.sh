@@ -55,8 +55,8 @@ Options:
     --open script       Open GUI and execute script (e.g., scripts/startup.tcl)
 
 Environment Variables:
-    PROJ_NAME       - Project name (default: croc)
-    TOP_DESIGN      - Top module name (default: croc_chip)
+    PROJ_NAME       - Project name (default: hft)
+    TOP_DESIGN      - Top module name (default: hft_chip)
 
 Examples:
     # Run entire backend flow

@@ -3,7 +3,7 @@
 #include <cstring>
 #include <cstdint>
 #include <random>
-#include "Vcroc_chip.h"
+#include "Vhft_chip.h"
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 #include "orderbook.h"
@@ -20,7 +20,7 @@
 // Latencies modelled exactly:
 //   * inputs are registered at the pad boundary (+1 cycle before the core acts)
 //   * orderbook output is registered          (+1 cycle from a book-changing msg)
-//   * croc_chip registers a copy of the book  (+1 cycle before a trader sees it)
+//   * hft_chip registers a copy of the book  (+1 cycle before a trader sees it)
 //   * private fills reach traders in the same cycle the book sees the input
 //   * the output bus is registered            (+1 cycle from a trader decision)
 
@@ -117,7 +117,7 @@ static void model_advance(ChipModel* m, const InMsg& in_new) {
 }
 
 // ---------------- DUT plumbing ----------------
-static void drive(Vcroc_chip* dut, const InMsg& in) {
+static void drive(Vhft_chip* dut, const InMsg& in) {
     dut->valid_i        = in.valid;
     dut->message_type_i = in.msg_type;
     dut->market_i       = in.market;
@@ -127,7 +127,7 @@ static void drive(Vcroc_chip* dut, const InMsg& in) {
     dut->qty_i          = in.qty;
 }
 
-static bool compare(Vcroc_chip* dut, const OutBus& e, const char* label) {
+static bool compare(Vhft_chip* dut, const OutBus& e, const char* label) {
     g_checks++;
     bool ok = ((bool)dut->valid_o == e.valid) && ((bool)dut->error_o == e.error)
               && ((bool)dut->spare0_o == false);
@@ -146,12 +146,12 @@ static bool compare(Vcroc_chip* dut, const OutBus& e, const char* label) {
     return ok;
 }
 
-static void clk_edge(Vcroc_chip* dut) {
+static void clk_edge(Vhft_chip* dut) {
     dut->clk_i = 1; dut->eval(); dump();
     dut->clk_i = 0; dut->eval(); dump();
 }
 
-static void reset(Vcroc_chip* dut, ChipModel* m) {
+static void reset(Vhft_chip* dut, ChipModel* m) {
     InMsg z{ false, 0, 0, Insert, Bid, 0, 0 };
     drive(dut, z);
     dut->rst_ni = 0; dut->clk_i = 0; dut->eval();
@@ -160,7 +160,7 @@ static void reset(Vcroc_chip* dut, ChipModel* m) {
     model_init(m);
 }
 
-static bool cycle(Vcroc_chip* dut, ChipModel* m, const InMsg& in, const char* label) {
+static bool cycle(Vhft_chip* dut, ChipModel* m, const InMsg& in, const char* label) {
     drive(dut, in);
     dut->eval();
     bool ok = compare(dut, m->out, label);   // DUT registered output == model.out
@@ -209,7 +209,7 @@ static InMsg gen_fill(uint8_t market, std::mt19937& rng) {
     return InMsg{ true, MSG_PRIVATE, market, Insert, rnd(0,1) ? Ask : Bid, 0, (qty_t)rnd(1, QTY_MAX) };
 }
 
-static int run_random(Vcroc_chip* dut, ChipModel* m, uint32_t seed, int ncyc) {
+static int run_random(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc) {
     printf("=== random: seed=%u ncyc=%d ===\n", seed, ncyc);
     std::mt19937 rng(seed);
     auto rnd = [&](int lo, int hi) { return (int)(rng() % (hi - lo + 1)) + lo; };
@@ -244,10 +244,10 @@ static int run_random(Vcroc_chip* dut, ChipModel* m, uint32_t seed, int ncyc) {
 int main(int argc, char** argv) {
     Verilated::commandArgs(argc, argv);
     Verilated::traceEverOn(true);
-    Vcroc_chip* dut = new Vcroc_chip;
+    Vhft_chip* dut = new Vhft_chip;
     g_tfp = new VerilatedVcdC;
     dut->trace(g_tfp, 99);
-    g_tfp->open("obj_dir/croc_chip.vcd");
+    g_tfp->open("obj_dir/hft_chip.vcd");
 
     ChipModel m;
     dut->clk_i = 0; dut->eval();

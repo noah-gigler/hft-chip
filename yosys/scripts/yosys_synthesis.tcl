@@ -21,7 +21,7 @@ set abc_script [processAbcScript scripts/abc-opt.script]
 source scripts/init_tech.tcl
 
 yosys plugin -i slang.so
-# default from yosys_common.tcl: top_design=hft_chip; sv_flist=./croc.flist
+# default from yosys_common.tcl: top_design=hft_chip; sv_flist=./hft.flist
 yosys read_slang --top $top_design -f $sv_flist \
         --compat-mode --keep-hierarchy \
         --allow-use-before-declare --ignore-unknown-modules

@@ -37,7 +37,7 @@ Options:
     --logo SRC_FILE     Create an ASIC art on the top metal layer from 'artistic/src/logo_chip.svg'
                         The source file is seen relative to the 'klayout/out' directory.
     --render            Render the logo-enhanced GDS
-    --outline           Annotate the render with module oulines defined in 'artistic/src/croc_modules.json'
+    --outline           Annotate the render with module oulines defined in 'artistic/src/hft_modules.json'
     --render-map        Render and generate an OpenStreetMap DB
     --cleanup           Cleanup intermittent files
 
@@ -60,20 +60,20 @@ prepare_logo() {
 
     # customize logo
     run_cmd "mkdir -p meerkat_work"
-    run_cmd "sed 's/#DATE#/$(date '+%Y-%m-%d')/g' src/logo_chip.svg > meerkat_work/croc_logo.svg"
-    run_cmd "sed -i 's/#HASH#/$(git rev-parse --short HEAD)/g' meerkat_work/croc_logo.svg"
-    run_cmd "sed -i 's|#REPO#|gh.io/$GITHUB_REPOSITORY|g' meerkat_work/croc_logo.svg"
+    run_cmd "sed 's/#DATE#/$(date '+%Y-%m-%d')/g' src/logo_chip.svg > meerkat_work/hft_logo.svg"
+    run_cmd "sed -i 's/#HASH#/$(git rev-parse --short HEAD)/g' meerkat_work/hft_logo.svg"
+    run_cmd "sed -i 's|#REPO#|gh.io/$GITHUB_REPOSITORY|g' meerkat_work/hft_logo.svg"
 
-    run_cmd "inkscape meerkat_work/croc_logo.svg \
+    run_cmd "inkscape meerkat_work/hft_logo.svg \
         -w 660 \
         -h 660 \
-        -o meerkat_work/croc_logo.png \
+        -o meerkat_work/hft_logo.png \
         > /dev/null 2>&1"
 
-    run_cmd "convert meerkat_work/croc_logo.png \
+    run_cmd "convert meerkat_work/hft_logo.png \
         -dither FloydSteinberg \
         -remap pattern:gray50 \
-        meerkat_work/croc_logo.mono.png \
+        meerkat_work/hft_logo.mono.png \
         > /dev/null"
 }
 
@@ -83,26 +83,26 @@ create_logo() {
 
     run_cmd "python3 artistic/scripts/meerkat_interface.py \
         -i ../../klayout/out/$1 \
-        -m croc_tm.gds.gz \
-        -g croc_logo.gds \
-        -o croc_chip.gds.gz \
+        -m hft_tm.gds.gz \
+        -g hft_logo.gds \
+        -o hft_chip.gds.gz \
         -w meerkat_work \
         -l 134"
 
     run_cmd "echo [INFO][Meerkat] Export top metal"
     run_cmd "cd meerkat_work"
     run_cmd "klayout -zz -rm ../artistic/scripts/export_top_metal.py"
-    run_cmd "gzip -f -d croc_tm.gds.gz"
+    run_cmd "gzip -f -d hft_tm.gds.gz"
     run_cmd "cd .."
 
     run_cmd "echo [INFO][Meerkat] Create logo"
     run_cmd "python3 artistic/scripts/meerkat.py \
-        -i meerkat_work/croc_logo.mono.png \
-        -g meerkat_work/croc_tm.gds \
+        -i meerkat_work/hft_logo.mono.png \
+        -g meerkat_work/hft_tm.gds \
         -l 134 \
-        -n croc \
-        -s meerkat_work/croc_logo.svg \
-        -o meerkat_work/croc_logo.gds \
+        -n hft \
+        -s meerkat_work/hft_logo.svg \
+        -o meerkat_work/hft_logo.gds \
         > meerkat_work/meerkat.log"
 
     run_cmd "echo [INFO] Merge logo with chip"
@@ -121,9 +121,9 @@ render() {
 
 finish_render() {
     run_cmd "echo [INFO][RenderICs] Convert output files"
-    run_cmd "cp renderics/DPI__croc_0-0.png renderics/croc_render.png"
-    run_cmd "cp renderics/PDF__croc_0-0.pdf renderics/croc_render.pdf"
-    run_cmd "convert renderics/croc_render.png renderics/croc_render.jpg"
+    run_cmd "cp renderics/DPI__hft_0-0.png renderics/hft_render.png"
+    run_cmd "cp renderics/PDF__hft_0-0.pdf renderics/hft_render.pdf"
+    run_cmd "convert renderics/hft_render.png renderics/hft_render.jpg"
 }
 
 
@@ -131,11 +131,11 @@ gen_outline() {
     run_cmd "echo [INFO][OutlineGen] Generate module outlines"
     run_cmd "python3 artistic/scripts/gen_outline.py \
     -i ../openroad/out/${PROJ_NAME}.def \
-    -o renderics/croc_modules.svg \
-    -b renderics/croc_render.jpg \
+    -o renderics/hft_modules.svg \
+    -b renderics/hft_render.jpg \
     --lef_files ${PDK_DIR_LEF_SRAMS}/*.lef \
     --px_scale 15000 \
-    --module_json src/croc_modules.json \
+    --module_json src/hft_modules.json \
     --opacity 0.65 \
     --font_size 35 \
     --luminosity 0.85 \
@@ -146,16 +146,16 @@ gen_outline() {
 
 finish_outline() {
     run_cmd "echo [INFO][OutlineGen] Convert output files"
-    run_cmd "inkscape renderics/croc_modules.svg -o renderics/croc_modules.png > /dev/null 2>&1"
-    run_cmd "inkscape renderics/croc_modules.svg -o renderics/croc_modules.pdf > /dev/null 2>&1"
-    run_cmd "convert renderics/croc_modules.png renderics/croc_modules.jpg"
+    run_cmd "inkscape renderics/hft_modules.svg -o renderics/hft_modules.png > /dev/null 2>&1"
+    run_cmd "inkscape renderics/hft_modules.svg -o renderics/hft_modules.pdf > /dev/null 2>&1"
+    run_cmd "convert renderics/hft_modules.png renderics/hft_modules.jpg"
 }
 
 
 convert_map() {
     run_cmd "echo [INFO][Mapify] Convert to OpenStreetMap DB"
     run_cmd "cd artistic"
-    run_cmd "python3 scripts/mapify.py ../src/croc_map.json | bash"
+    run_cmd "python3 scripts/mapify.py ../src/hft_map.json | bash"
     run_cmd "cp ../src/show_map.html ../mapify/index.html"
 }
 
@@ -214,19 +214,19 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --render-raw) # CI only
-            render analyze croc
-            render gen_raw croc
+            render analyze hft
+            render gen_raw hft
             shift
             ;;
         --render-pdf) # CI only
-            render gen_pdfs croc
+            render gen_pdfs hft
             finish_render
             shift
             ;;
         --render)
-            render analyze croc
-            render gen_raw croc
-            render gen_pdfs croc
+            render analyze hft
+            render gen_raw hft
+            render gen_pdfs hft
             finish_render
             shift
             ;;
@@ -236,19 +236,19 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --render-map-raw) # CI only
-            render analyze croc_map
-            render gen_raw croc_map
+            render analyze hft_map
+            render gen_raw hft_map
             shift
             ;;
         --render-map-db) # CI only
-            render gen_pdfs croc_map
+            render gen_pdfs hft_map
             convert_map
             shift
             ;;
         --render-map)
-            render analyze croc_map
-            render gen_raw croc_map
-            render gen_segs croc_map
+            render analyze hft_map
+            render gen_raw hft_map
+            render gen_segs hft_map
             convert_map
             shift
             ;;

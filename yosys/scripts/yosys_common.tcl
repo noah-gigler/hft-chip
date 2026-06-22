@@ -9,14 +9,14 @@
 # A common setup to provide some functionality and define variables
 
 # set global variables
-set sv_flist   "src/croc.flist"
+set sv_flist   "src/hft.flist"
 set out_dir    out
 set tmp_dir    tmp
 set rep_dir    reports
 
 # global variables imported from environment variables (if set)
 # define with scheme: <local-var> { <ENVVAR>  <fallback> }
-set proj_name  [expr {[info exists ::env(PROJ_NAME)]  ? $::env(PROJ_NAME)  : "croc"}]
+set proj_name  [expr {[info exists ::env(PROJ_NAME)]  ? $::env(PROJ_NAME)  : "hft"}]
 set top_design [expr {[info exists ::env(TOP_DESIGN)] ? $::env(TOP_DESIGN) : "hft_chip"}]
 
 file mkdir $out_dir

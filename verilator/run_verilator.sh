@@ -32,7 +32,7 @@ Options:
     --help, -h          Show this help message
     --dry-run, -n       Only print commands instead of executing
     --verbose, -v       Print commands while executing
-    --flist             Regenerate flist (croc.f)
+    --flist             Regenerate flist (hft.f)
     --build             Build croc_soc Verilator binary
     --run BINARY        Run binary in Verilator
 
@@ -77,13 +77,13 @@ build_verilator() {
         --x-initial fast \
         -O3 \
         --top tb_croc_soc \
-        -f croc.f 2>&1 | \
+        -f hft.f 2>&1 | \
         tee ${PROJ_NAME}_build.log"
 }
 
 
 generate_flist() {
-    run_cmd "echo [INFO][Bender] Generate croc.f"
+    run_cmd "echo [INFO][Bender] Generate hft.f"
     run_cmd "bender \
         script flist-plus \
         -t rtl \
@@ -91,12 +91,12 @@ generate_flist() {
         -t synthesis \
         -D VERILATOR=1 \
         -D COMMON_CELLS_ASSERTS_OFF=1 \
-        > croc.f"
+        > hft.f"
 
     run_cmd "echo [INFO][Bender] Remove absolute paths"
-    run_cmd "sed -i 's|${CROC_ROOT}|..|g' croc.f"
+    run_cmd "sed -i 's|${HFT_ROOT}|..|g' hft.f"
 
-    run_cmd "echo [INFO][Bender] File list generated: croc.f"
+    run_cmd "echo [INFO][Bender] File list generated: hft.f"
 }
 
 run_binary() {

@@ -15,7 +15,7 @@
 # - Write final outputs (DEF, Verilog, ODB, SDC)
 #
 # Required environment variables:
-#   PROJ_NAME    - Project name (e.g., "croc")
+#   PROJ_NAME    - Project name (e.g., "hft")
 #   TOP_DESIGN   - Top module name
 #
 # Input checkpoint: 04_${PROJ_NAME}.routed

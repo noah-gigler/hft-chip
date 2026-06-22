@@ -36,13 +36,13 @@ Options:
     --verbose, -v       Print commands while executing
     --synth             Synthesize ${TOP_DESIGN}
     --open              Open Yosys
-    --flist             Regenerate flist (src/croc.flist)
+    --flist             Regenerate flist (src/hft.flist)
 
 Environment Variables:
     TOP_DESIGN          Top module name (default: ${TOP_DESIGN})
 
 Inputs:
-    - RTL file list: src/croc.flist
+    - RTL file list: src/hft.flist
     - PDK Liberty files (auto-discovered)
 
 Outputs:
@@ -91,7 +91,7 @@ open_yosys() {
 
 
 generate_flist() {
-    run_cmd "echo [INFO][Bender] Generate src/croc.flist"
+    run_cmd "echo [INFO][Bender] Generate src/hft.flist"
     run_cmd "bender \
         script flist-plus \
         -t asic \
@@ -101,12 +101,12 @@ generate_flist() {
         -D VERILATOR=1 \
         -D SYNTHESIS=1 \
         -D COMMON_CELLS_ASSERTS_OFF=1 \
-        > src/croc.flist"
+        > src/hft.flist"
 
     run_cmd "echo [INFO][Bender] Remove absolute paths"
-    run_cmd "sed -i 's|${CROC_ROOT}|..|g' src/croc.flist"
+    run_cmd "sed -i 's|${HFT_ROOT}|..|g' src/hft.flist"
 
-    run_cmd "echo [INFO][Bender] File list generated: src/croc.flist"
+    run_cmd "echo [INFO][Bender] File list generated: src/hft.flist"
 }
 
 

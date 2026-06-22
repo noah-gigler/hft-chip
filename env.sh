@@ -7,24 +7,24 @@
 # - Philippe Sauter <phsauter@iis.ee.ethz.ch>
 # - Thomas Benz     <tbenz@iis.ee.ethz.ch>
 #
-# Environment setup for Croc SoC ASIC flow
+# Environment setup for HFT chip ASIC flow
 # This file is sourced by all scripts to set up tool paths and PDK location
 
 # Determine repository root
 if [[ -n "${BASH_SOURCE[0]}" ]]; then
-    export CROC_ROOT=$(realpath $(dirname "${BASH_SOURCE[0]}"))
+    export HFT_ROOT=$(realpath $(dirname "${BASH_SOURCE[0]}"))
 else
-    export CROC_ROOT=$(pwd)
+    export HFT_ROOT=$(pwd)
 fi
-echo "[INFO][ENV] Croc root: $CROC_ROOT"
+echo "[INFO][ENV] HFT root: $HFT_ROOT"
 
 
 ######################
 # Project Settings
 ######################
-export PROJ_NAME="${PROJ_NAME:-croc}"
-export TOP_DESIGN="${TOP_DESIGN:-croc_chip}"
-export DUT_DESIGN="${DUT_DESIGN:-croc_soc}"
+export PROJ_NAME="${PROJ_NAME:-hft}"
+export TOP_DESIGN="${TOP_DESIGN:-hft_chip}"
+export DUT_DESIGN="${DUT_DESIGN:-hft_core}"
 
 
 ###################
@@ -32,11 +32,11 @@ export DUT_DESIGN="${DUT_DESIGN:-croc_soc}"
 ###################
 # priority: technology/ over ihp13/pdk/
 
-if [[ -d "${CROC_ROOT}/technology" ]]; then
+if [[ -d "${HFT_ROOT}/technology" ]]; then
 
     echo "[INFO][ENV] Init tech from ETHZ DZ cockpit"
-    export PDK_ROOT="$CROC_ROOT/technology"
-    export KLAYOUT_PATH="$CROC_ROOT/klayout/.klayout"
+    export PDK_ROOT="$HFT_ROOT/technology"
+    export KLAYOUT_PATH="$HFT_ROOT/klayout/.klayout"
     export PDK_DIR_LEF_TECH="$PDK_ROOT/lef"
     export PDK_DIR_LEF_CELLS="$PDK_ROOT/lef"
     export PDK_DIR_LEF_SRAMS="$PDK_ROOT/lef"

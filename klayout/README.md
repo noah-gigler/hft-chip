@@ -8,6 +8,6 @@ Note: you can change the tools version by specifying it to the `oseda` command (
 ```bash
 $ cd klayout
 $ oseda bash
-oseda-2026.04:[klayout] ./def2gds-croc
-oseda-2026.04:[klayout] ./run_drc-croc
+oseda-2026.04:[klayout] ./def2gds-hft
+oseda-2026.04:[klayout] ./run_drc-hft
 ```

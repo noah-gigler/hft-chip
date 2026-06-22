@@ -78,7 +78,7 @@ generate_rtl_flist() {
         > compile_rtl.tcl"
 
     run_cmd "echo [INFO][Bender] Remove absolute paths"
-    run_cmd "sed -i 's|${CROC_ROOT}|..|g' compile_rtl.tcl"
+    run_cmd "sed -i 's|${HFT_ROOT}|..|g' compile_rtl.tcl"
 
     run_cmd "echo [INFO][Bender] File list generated: compile_rtl.tcl"
 }
@@ -99,7 +99,7 @@ generate_netlist_flist() {
         > compile_netlist.tcl"
 
     run_cmd "echo [INFO][Bender] Remove absolute paths"
-    run_cmd "sed -i 's|${CROC_ROOT}|..|g' compile_netlist.tcl"
+    run_cmd "sed -i 's|${HFT_ROOT}|..|g' compile_netlist.tcl"
 
     run_cmd "echo [INFO][Bender] File list generated: compile_netlist.tcl"
 }

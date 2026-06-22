@@ -88,7 +88,7 @@ proc print_report {sorted_hierarchies stats_ref block_ref dbu_per_uu} {
 
     # Set up report directory and filename
     if { ![info exists report_dir] } { set report_dir "reports" }
-    if { ![info exists when] } { set when "croc.area" }
+    if { ![info exists when] } { set when "hft.area" }
     if { ![info exists filename] } {
         set filename "$report_dir/$when.rpt"
         set fileId [open $filename w]
@@ -203,7 +203,7 @@ proc save_report_csv {sorted_hierarchies filename stats_ref block_ref dbu_per_uu
     # Set up report directory and filename
     if { ![info exists report_dir] } { set report_dir "reports" }
     if { ![info exists filename] } {
-        set filename "$report_dir/croc.area.csv"
+        set filename "$report_dir/hft.area.csv"
     }
     set fileId [open $filename w]
 
@@ -327,7 +327,7 @@ proc report_area_hierarchical {args} {
 
     if { [info exists flags(-csv)] } {
         if { ![info exists keys(-filenameCSV)] } {
-            set keys(-filenameCSV) "croc.area.csv"
+            set keys(-filenameCSV) "hft.area.csv"
         }
         save_report_csv $sorted_hierarchies $keys(-filenameCSV) stats block $dbu_per_uu
     } else {
@@ -340,6 +340,6 @@ proc report_area_hierarchical {args} {
 ################################################################################
 # Example usage
 ################################################################################
-# load_checkpoint "07_croc.final"
+# load_checkpoint "07_hft.final"
 # report_area_hierarchical
-# report_area_hierarchical -csv -filenameCSV "reports/croc.area.csv"
+# report_area_hierarchical -csv -filenameCSV "reports/hft.area.csv"

@@ -74,7 +74,7 @@ generate_flist() {
         > scripts/add_sources.genesys2.tcl"
 
     run_cmd "echo [INFO][Bender] Remove absolute paths"
-    run_cmd "sed -i 's|${CROC_ROOT}|../../..|g' scripts/add_sources.genesys2.tcl"
+    run_cmd "sed -i 's|${HFT_ROOT}|../../..|g' scripts/add_sources.genesys2.tcl"
 
     run_cmd "echo [INFO][Bender] File list generated: add_sources.genesys2.tcl"
 }

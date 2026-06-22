@@ -17,7 +17,7 @@
 # - Generating the power distribution network
 #
 # Required environment variables:
-#   PROJ_NAME    - Project name (e.g., "croc")
+#   PROJ_NAME    - Project name (e.g., "hft")
 #   NETLIST      - Path to synthesized netlist
 #   TOP_DESIGN   - Top module name
 #

@@ -16,7 +16,7 @@
 # - Repair setup timing violations
 #
 # Required environment variables:
-#   PROJ_NAME    - Project name (e.g., "croc")
+#   PROJ_NAME    - Project name (e.g., "hft")
 #   TOP_DESIGN   - Top module name
 #
 # Input checkpoint: 02_${PROJ_NAME}.placed
