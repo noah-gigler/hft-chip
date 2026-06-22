@@ -38,6 +38,12 @@ static void drive_book(Vmomentum_trader* dut, const book_t* b) {
     pack_qtys  (&dut->bid_qtys_i[0],   b->bid_qtys);
     pack_prices(&dut->ask_prices_i[0], b->ask_prices);
     pack_qtys  (&dut->ask_qtys_i[0],   b->ask_qtys);
+    // sums are now maintained in the orderbook and fed in; the DUT registers
+    // them once, matching the old internal reduction. Drive the full book sum.
+    uint32_t bsum = 0, asum = 0;
+    for (int i = 0; i < N; i++) { bsum += b->bid_qtys[i]; asum += b->ask_qtys[i]; }
+    dut->bid_qty_sum_i = bsum;
+    dut->ask_qty_sum_i = asum;
 }
 
 static bool compare(Vmomentum_trader* dut, const trade_out_t& e, const char* label) {

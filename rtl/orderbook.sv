@@ -18,8 +18,15 @@ module orderbook
     output price_t [N-1:0] ask_prices_o,
     output qty_t   [N-1:0] ask_qtys_o,
 
+    // running total qty per side, maintained incrementally (avoids N-wide
+    // combinational reductions in downstream traders)
+    output logic [$clog2(N)+QTY_WIDTH-1:0] bid_qty_sum_o,
+    output logic [$clog2(N)+QTY_WIDTH-1:0] ask_qty_sum_o,
+
     output logic error_o
 );
+
+    localparam int SUM_WIDTH = $clog2(N)+QTY_WIDTH;
 
     typedef price_t[N-1:0] prices_t;
     typedef qty_t[N-1:0] qtys_t;
@@ -32,6 +39,9 @@ module orderbook
 
     logic error_d, error_q;
 
+    logic [SUM_WIDTH-1:0] bid_sum_d, bid_sum_q;
+    logic [SUM_WIDTH-1:0] ask_sum_d, ask_sum_q;
+
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
             error_q <= 1'b0;
@@ -40,13 +50,17 @@ module orderbook
             bid_qtys_q <= 0;
             ask_prices_q <= '{default: DEFAULT_ASK};
             ask_qtys_q <= 0;
+            bid_sum_q <= '0;
+            ask_sum_q <= '0;
         end else begin
             error_q <= error_d;
-        
+
             bid_prices_q <= bid_prices_d;
             bid_qtys_q <= bid_qtys_d;
             ask_prices_q <= ask_prices_d;
             ask_qtys_q <= ask_qtys_d;
+            bid_sum_q <= bid_sum_d;
+            ask_sum_q <= ask_sum_d;
         end
     end
 
@@ -72,11 +86,15 @@ module orderbook
         logic[$clog2(N)-1:0] cmp_idx;
         logic pre_error;
         logic onehot;
-        
+        logic signed [QTY_WIDTH+1:0] sum_delta; // change in active-side total qty
+
         bid_prices_d = bid_prices_q;
         bid_qtys_d = bid_qtys_q;
         ask_prices_d = ask_prices_q;
         ask_qtys_d = ask_qtys_q;
+        bid_sum_d = bid_sum_q;
+        ask_sum_d = ask_sum_q;
+        sum_delta = '0;
 
         // assign defaults to avoid latches
         cur_prices = (side_i == Bid) ? bid_prices_q : ask_prices_q;
@@ -117,6 +135,7 @@ module orderbook
                             error_d = 1'b1;
                         end else begin
                             new_qtys[eq_idx] = cur_qtys[eq_idx] + qty_i;
+                            sum_delta = signed'({2'b0, qty_i});
                         end
                     end else if (|compares) begin
                         cmp_idx = first(compares); // only call first if we have at least one
@@ -126,6 +145,8 @@ module orderbook
                         end
                         new_prices[cmp_idx] = price_i;
                         new_qtys[cmp_idx]   = qty_i;
+                        // new level pushes the lowest-priority level (N-1) off the book
+                        sum_delta = signed'({2'b0, qty_i}) - signed'({2'b0, cur_qtys[N-1]});
                     end
                     // else: price outside top-N tracked levels — silently drop
                     Remove: if (any_eq && cur_qtys[eq_idx] >= qty_i) begin
@@ -139,6 +160,7 @@ module orderbook
                         end else begin
                             new_qtys[eq_idx] = cur_qtys[eq_idx] - qty_i;
                         end
+                        sum_delta = -signed'({2'b0, qty_i});
                     end else begin
                         error_d = 1'b1;
                     end
@@ -151,10 +173,12 @@ module orderbook
                     Bid: begin
                         bid_prices_d = new_prices;
                         bid_qtys_d = new_qtys;
+                        bid_sum_d = SUM_WIDTH'(signed'({1'b0, bid_sum_q}) + sum_delta);
                     end
                     Ask: begin
                         ask_prices_d = new_prices;
                         ask_qtys_d = new_qtys;
+                        ask_sum_d = SUM_WIDTH'(signed'({1'b0, ask_sum_q}) + sum_delta);
                     end
                     default: begin
                         error_d = 1'b1;
@@ -168,6 +192,9 @@ module orderbook
     assign bid_qtys_o   = bid_qtys_q;
     assign ask_prices_o = ask_prices_q;
     assign ask_qtys_o   = ask_qtys_q;
+
+    assign bid_qty_sum_o = bid_sum_q;
+    assign ask_qty_sum_o = ask_sum_q;
 
     assign error_o = error_q;
 

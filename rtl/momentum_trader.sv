@@ -15,6 +15,10 @@ module momentum_trader
     input  price_t [N-1:0] ask_prices_i,
     input  qty_t   [N-1:0] ask_qtys_i,
 
+    // running totals, summed incrementally in the orderbook
+    input  logic [$clog2(N)+QTY_WIDTH-1:0] bid_qty_sum_i,
+    input  logic [$clog2(N)+QTY_WIDTH-1:0] ask_qty_sum_i,
+
     // private order feed
     input logic            order_filled_i,
     input price_t          filled_price_i,
@@ -48,17 +52,9 @@ module momentum_trader
     price_t order_price_q, order_price_d;
     qty_t order_qty_q, order_qty_d;
 
-    // precompute sums to break critical path
+    // sums are maintained incrementally in the orderbook; register them once
+    // more here to preserve the original pipeline alignment
     logic [$clog2(N)+QTY_WIDTH-1:0] bids_sum_q, asks_sum_q;
-    logic [$clog2(N)+QTY_WIDTH-1:0] b_acc, a_acc;
-
-    always_comb begin
-        b_acc = '0; a_acc = '0;
-        for (int i = 0; i < N; i++) begin
-            b_acc += bid_qtys_i[i];
-            a_acc += ask_qtys_i[i];
-        end
-    end
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
@@ -79,8 +75,8 @@ module momentum_trader
             order_side_q  <= order_side_d;
             order_price_q <= order_price_d;
             order_qty_q   <= order_qty_d;
-            bids_sum_q <= b_acc;
-            asks_sum_q <= a_acc;
+            bids_sum_q <= bid_qty_sum_i;
+            asks_sum_q <= ask_qty_sum_i;
         end
     end
 

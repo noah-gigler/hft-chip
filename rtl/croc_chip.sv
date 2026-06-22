@@ -133,6 +133,12 @@ module croc_chip import orderbook_pkg::*; #() (
   price_t [3:0][N-1:0] bid_prices_q, ask_prices_q;
   qty_t   [3:0][N-1:0] bid_qtys_q,   ask_qtys_q;
 
+  // running per-side totals from the orderbooks (only market 2 is consumed,
+  // by the momentum trader) plus their pipeline registers
+  localparam int SUM_WIDTH = $clog2(N)+QTY_WIDTH;
+  logic [SUM_WIDTH-1:0] bid_qty_sum2, ask_qty_sum2;
+  logic [SUM_WIDTH-1:0] bid_qty_sum2_q, ask_qty_sum2_q;
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       for (int i = 0; i < 4; i++) begin
@@ -141,11 +147,15 @@ module croc_chip import orderbook_pkg::*; #() (
         ask_prices_q[i] <= '{default: DEFAULT_ASK};
         ask_qtys_q[i]   <= '0;
       end
+      bid_qty_sum2_q <= '0;
+      ask_qty_sum2_q <= '0;
     end else begin
       bid_prices_q <= bid_prices;
       bid_qtys_q   <= bid_qtys;
       ask_prices_q <= ask_prices;
       ask_qtys_q   <= ask_qtys;
+      bid_qty_sum2_q <= bid_qty_sum2;
+      ask_qty_sum2_q <= ask_qty_sum2;
     end
   end
 
@@ -245,6 +255,8 @@ module croc_chip import orderbook_pkg::*; #() (
     .bid_qtys_o   (bid_qtys[2]),
     .ask_prices_o (ask_prices[2]),
     .ask_qtys_o   (ask_qtys[2]),
+    .bid_qty_sum_o (bid_qty_sum2),
+    .ask_qty_sum_o (ask_qty_sum2),
 
     .error_o      (error_ob[2])
   );
@@ -302,6 +314,8 @@ module croc_chip import orderbook_pkg::*; #() (
     .bid_qtys_i   (bid_qtys_q[2]),
     .ask_prices_i (ask_prices_q[2]),
     .ask_qtys_i   (ask_qtys_q[2]),
+    .bid_qty_sum_i (bid_qty_sum2_q),
+    .ask_qty_sum_i (ask_qty_sum2_q),
 
     .order_filled_i (valid_trader[1]),
     .filled_price_i (in_price),
