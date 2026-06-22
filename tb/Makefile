@@ -63,11 +63,11 @@ ema: $(OBJ)/Vema_trader
 	$(OBJ)/Vema_trader --random $(SEED) $(NOPS)
 
 # ---------------- whole chip ----------------
-$(OBJ)/Vcroc_chip: $(RTL)/croc_chip.sv $(TRADERS) $(RTL)/orderbook.sv pad_stubs.sv \
+$(OBJ)/Vcroc_chip: $(RTL)/croc_chip.sv $(RTL)/hft_core.sv $(TRADERS) $(RTL)/orderbook.sv pad_stubs.sv \
                    tb_croc_chip.cpp $(MODELS) $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
 		--top-module croc_chip -CFLAGS "-I$(SW)" \
-		$(PKG) $(RTL)/orderbook.sv $(TRADERS) $(RTL)/croc_chip.sv pad_stubs.sv \
+		$(PKG) $(RTL)/orderbook.sv $(TRADERS) $(RTL)/hft_core.sv $(RTL)/croc_chip.sv pad_stubs.sv \
 		tb_croc_chip.cpp $(MODELS)
 
 chip: $(OBJ)/Vcroc_chip

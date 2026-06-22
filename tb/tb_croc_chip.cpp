@@ -18,9 +18,10 @@
 // state and predicts the trade bus every cycle.
 //
 // Latencies modelled exactly:
+//   * inputs are registered at the pad boundary (+1 cycle before the core acts)
 //   * orderbook output is registered          (+1 cycle from a book-changing msg)
 //   * croc_chip registers a copy of the book  (+1 cycle before a trader sees it)
-//   * private fills reach traders combinationally (same cycle)
+//   * private fills reach traders in the same cycle the book sees the input
 //   * the output bus is registered            (+1 cycle from a trader decision)
 
 static const int ARB_THRESHOLD = 2;     // matches rtl/arb_trader.sv default
@@ -35,16 +36,17 @@ static void dump() { if (g_tfp) g_tfp->dump(g_time); g_time++; }
 // ---------------- composite model ----------------
 struct OutBus { bool valid; uint8_t market; ob_side_t side; price_t price; qty_t qty; bool error; };
 
+struct InMsg { bool valid; uint8_t msg_type; uint8_t market; ob_op_t op; ob_side_t side; price_t price; qty_t qty; };
+
 struct ChipModel {
     orderbook_t   ob[4];
     book_t        copy[4];
     arb_model_t   arb;
     mom_model_t   mom;
     ema_model_t   ema;
+    InMsg         in_q;    // registered chip inputs (pad -> core boundary register)
     OutBus        out;     // registered chip output (what the pads present this cycle)
 };
-
-struct InMsg { bool valid; uint8_t msg_type; uint8_t market; ob_op_t op; ob_side_t side; price_t price; qty_t qty; };
 
 static book_t book_of(const orderbook_t* o) {
     book_t b;
@@ -58,11 +60,15 @@ static book_t book_of(const orderbook_t* o) {
 static void model_init(ChipModel* m) {
     for (int k = 0; k < 4; k++) { orderbook_init(&m->ob[k]); m->copy[k] = book_of(&m->ob[k]); }
     arb_init(&m->arb); mom_init(&m->mom); ema_init_model(&m->ema);
+    m->in_q = InMsg{ false, 0, 0, Insert, Bid, 0, 0 };
     m->out = OutBus{ false, 0, Bid, 0, 0, false };
 }
 
-// advance the model one clock under input `in`; updates m->out (registered).
-static void model_advance(ChipModel* m, const InMsg& in) {
+// advance the model one clock under input `in_new`. The chip registers its
+// inputs at the pad boundary, so the core acts on the PREVIOUS cycle's input
+// (m->in_q); `in_new` is registered for next cycle. Updates m->out (registered).
+static void model_advance(ChipModel* m, const InMsg& in_new) {
+    const InMsg in = m->in_q;   // registered input the core sees this cycle
     bool pub  = in.valid && in.msg_type == MSG_PUBLIC;
     bool priv = in.valid && in.msg_type == MSG_PRIVATE;
     bool vob[4]; for (int k = 0; k < 4; k++) vob[k] = pub && in.market == k;
@@ -106,6 +112,7 @@ static void model_advance(ChipModel* m, const InMsg& in) {
 
     // commit
     for (int k = 0; k < 4; k++) { m->ob[k] = ob_next[k]; m->copy[k] = copy_next[k]; }
+    m->in_q = in_new;   // boundary input register captures the new input
     m->out = o;
 }
 
