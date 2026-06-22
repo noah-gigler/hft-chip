@@ -165,14 +165,6 @@ module croc_chip import orderbook_pkg::*; #() (
   assign grant_mom = valid_mom & ~valid_arb;
   assign grant_ema = valid_ema & ~valid_arb & ~valid_mom;
 
-  // assign out_valid  = valid_arb | valid_mom | valid_ema;
-  // assign out_market = valid_arb ? {1'b0, market_arb} : valid_mom ? 2'd2 : 2'd3;
-  // assign out_side   = valid_arb ? side_arb : valid_mom ? side_mom : side_ema;
-  // assign out_price  = valid_arb ? price_arb : valid_mom ? price_mom : price_ema;
-  // assign out_qty    = valid_arb ? qty_arb : valid_mom ? qty_mom : qty_ema;
-
-  // assign out_error = error0 | error1 | error2 | error3 | error4 | error5 | error6;
-
   // output pad very slow so add pipeline
   always_ff @(posedge clk or negedge rst_n) begin
       if (!rst_n) begin

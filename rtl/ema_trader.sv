@@ -114,7 +114,7 @@ module ema_trader
             end
         end
 
-        // comupted here to avoid combinational loop
+        // computed here to avoid combinational loop
         pos_next  = position_q;
         pend_next = pending_q;
         if (!error_d && order_filled_i) begin

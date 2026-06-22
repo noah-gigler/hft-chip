@@ -119,7 +119,7 @@ module arb_trader
         qty_o    = '0;
         error_o  = error_d;
 
-        // comupted here to avoid combinational loop
+        // computed here to avoid combinational loop
         pend_next = pending_q;
         res_next  = residual_q;
         if (!error_d && order_filled_i) begin
