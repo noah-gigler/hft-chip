@@ -52,9 +52,9 @@ module momentum_trader
     price_t order_price_q, order_price_d;
     qty_t order_qty_q, order_qty_d;
 
-    // sums are maintained incrementally in the orderbook; register them once
-    // more here to preserve the original pipeline alignment
-    logic [$clog2(N)+QTY_WIDTH-1:0] bids_sum_q, asks_sum_q;
+    // sums are maintained incrementally in the orderbook and arrive aligned
+    // with the qty arrays (same pipeline depth), so use them directly — no
+    // extra register, no N-wide adder, no delay skew vs the top-of-book checks.
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
@@ -65,8 +65,6 @@ module momentum_trader
             order_price_q <= '0;
             order_qty_q   <= '0;
             position_q    <= '0;
-            bids_sum_q    <= '0;
-            asks_sum_q    <= '0;
         end else begin
             state_q       <= state_d;
             pending_q     <= pending_d;
@@ -75,8 +73,6 @@ module momentum_trader
             order_side_q  <= order_side_d;
             order_price_q <= order_price_d;
             order_qty_q   <= order_qty_d;
-            bids_sum_q <= bid_qty_sum_i;
-            asks_sum_q <= ask_qty_sum_i;
         end
     end
 
@@ -120,7 +116,7 @@ module momentum_trader
             case (state_q)
 
                 IDLE: begin
-                    imb = signed'({1'b0, bids_sum_q}) - signed'({1'b0, asks_sum_q});
+                    imb = signed'({1'b0, bid_qty_sum_i}) - signed'({1'b0, ask_qty_sum_i});
 
                     buy_signal  = (imb >  IMB_THRESHOLD) && (pos_next < +MAX_POS) && ask_qtys_i[0] != 0;
                     sell_signal = (imb < -IMB_THRESHOLD) && (pos_next > -MAX_POS) && bid_qtys_i[0] != 0;

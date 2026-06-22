@@ -16,8 +16,6 @@ typedef struct {
     ob_side_t order_side;
     price_t  order_price;
     qty_t    order_qty;
-    uint16_t bids_sum;      // registered full-depth qty sums (13-bit)
-    uint16_t asks_sum;
 } mom_model_t;
 
 void mom_init(mom_model_t *m);

@@ -11,7 +11,6 @@ void mom_init(mom_model_t *m) {
     m->state = MOM_IDLE;
     m->pending = 0; m->position = 0; m->error = false;
     m->order_side = Bid; m->order_price = 0; m->order_qty = 0;
-    m->bids_sum = 0; m->asks_sum = 0;
 }
 
 trade_out_t mom_step(mom_model_t *m, const book_t *b,
@@ -36,7 +35,10 @@ trade_out_t mom_step(mom_model_t *m, const book_t *b,
     if (!error_d) {
         switch (m->state) {
         case MOM_IDLE: {
-            int imb = (int)m->bids_sum - (int)m->asks_sum;   // uses registered (prev) sums
+            // sums come from the orderbook aligned with the current book, no skew
+            unsigned bs = 0, as = 0;
+            for (int i = 0; i < N; i++) { bs += b->bid_qtys[i]; as += b->ask_qtys[i]; }
+            int imb = (int)bs - (int)as;
             bool buy  = imb >  MOM_IMB_THRESHOLD && pos_next <  +MOM_MAX_POS && b->ask_qtys[0] != 0;
             bool sell = imb < -MOM_IMB_THRESHOLD && pos_next >  -MOM_MAX_POS && b->bid_qtys[0] != 0;
             if (buy) {
@@ -63,12 +65,6 @@ trade_out_t mom_step(mom_model_t *m, const book_t *b,
             break;
         }
     }
-
-    // registered full-depth sums recomputed from the CURRENT book (available next cycle)
-    unsigned bs = 0, as = 0;
-    for (int i = 0; i < N; i++) { bs += b->bid_qtys[i]; as += b->ask_qtys[i]; }
-    n.bids_sum = (uint16_t)bs;
-    n.asks_sum = (uint16_t)as;
 
     *m = n;
     return o;

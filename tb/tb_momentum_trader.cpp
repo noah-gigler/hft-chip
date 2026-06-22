@@ -92,13 +92,11 @@ static bool cycle(Vmomentum_trader* dut, mom_model_t* m, const book_t* b,
 static void anchor_checks() {
     mom_model_t m; mom_init(&m);
     book_t b; memset(&b, 0, sizeof b);
-    // heavy asks, light bids -> imbalance negative -> sell signal (after sums register)
+    // heavy asks, light bids -> imbalance negative -> sell signal (sums are
+    // now aligned with the book, so IDLE acts on imb in the same cycle)
     for (int i = 0; i < 4; i++) { b.ask_qtys[i] = 50; b.ask_prices[i] = 200 - i; }
     b.bid_qtys[0] = 5; b.bid_prices[0] = 150;
-    mom_step(&m, &b, 0, 0, Bid, 0);   // cycle0: sums latch (200 ask, 5 bid)
-    g_checks++;
-    if (!(m.asks_sum == 200 && m.bids_sum == 5)) { printf("FAIL [anchor] mom sums\n"); g_errors++; }
-    trade_out_t e = mom_step(&m, &b, 0, 0, Bid, 0); // cycle1: IDLE sees imb=-195 -> sell -> TRADE next
+    trade_out_t e = mom_step(&m, &b, 0, 0, Bid, 0); // IDLE sees imb=-195 -> sell -> TRADE next
     g_checks++;
     if (!(m.state == MOM_TRADE && m.order_side == Ask && m.order_price == 150)) {
         printf("FAIL [anchor] mom sell setup (state=%d side=%d price=%u)\n",
