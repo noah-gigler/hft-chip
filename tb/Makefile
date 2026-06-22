@@ -63,15 +63,15 @@ ema: $(OBJ)/Vema_trader
 	$(OBJ)/Vema_trader --random $(SEED) $(NOPS)
 
 # ---------------- whole chip ----------------
-$(OBJ)/Vcroc_chip: $(RTL)/croc_chip.sv $(RTL)/hft_core.sv $(TRADERS) $(RTL)/orderbook.sv pad_stubs.sv \
-                   tb_croc_chip.cpp $(MODELS) $(SW)/common.h $(PKG)
+$(OBJ)/Vhft_chip: $(RTL)/hft_chip.sv $(RTL)/hft_core.sv $(TRADERS) $(RTL)/orderbook.sv pad_stubs.sv \
+                   tb_hft_chip.cpp $(MODELS) $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module croc_chip -CFLAGS "-I$(SW)" \
-		$(PKG) $(RTL)/orderbook.sv $(TRADERS) $(RTL)/hft_core.sv $(RTL)/croc_chip.sv pad_stubs.sv \
-		tb_croc_chip.cpp $(MODELS)
+		--top-module hft_chip -CFLAGS "-I$(SW)" \
+		$(PKG) $(RTL)/orderbook.sv $(TRADERS) $(RTL)/hft_core.sv $(RTL)/hft_chip.sv pad_stubs.sv \
+		tb_hft_chip.cpp $(MODELS)
 
-chip: $(OBJ)/Vcroc_chip
-	$(OBJ)/Vcroc_chip --random $(SEED) $(NOPS)
+chip: $(OBJ)/Vhft_chip
+	$(OBJ)/Vhft_chip --random $(SEED) $(NOPS)
 
 clean:
 	rm -rf $(OBJ)

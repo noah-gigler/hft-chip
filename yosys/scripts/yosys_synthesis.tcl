@@ -21,7 +21,7 @@ set abc_script [processAbcScript scripts/abc-opt.script]
 source scripts/init_tech.tcl
 
 yosys plugin -i slang.so
-# default from yosys_common.tcl: top_design=croc_chip; sv_flist=./croc.flist
+# default from yosys_common.tcl: top_design=hft_chip; sv_flist=./croc.flist
 yosys read_slang --top $top_design -f $sv_flist \
         --compat-mode --keep-hierarchy \
         --allow-use-before-declare --ignore-unknown-modules
@@ -30,7 +30,7 @@ yosys read_slang --top $top_design -f $sv_flist \
 # 't' means type as in select all instances of this type/module
 # yosys-slang uniquifies all modules with the naming scheme:
 # <module-name>$<instance-name> -> match for t:<module-name>$$
-yosys setattr -set keep_hierarchy 1 "t:croc_chip$*"
+yosys setattr -set keep_hierarchy 1 "t:hft_chip$*"
 
 # blackbox modules (applies the *blackbox* attribute)
 yosys blackbox "t:tc_sram_blackbox$*"

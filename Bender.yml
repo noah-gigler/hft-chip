@@ -5,7 +5,7 @@ package:
     - "Luis Wirth <luwirth@ethz.ch>"
 
 sources:
-  - rtl/croc_chip.sv
+  - rtl/hft_chip.sv
   - rtl/hft_core.sv
   - rtl/orderbook_pkg.sv
   - rtl/orderbook.sv

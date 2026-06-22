@@ -428,7 +428,7 @@ if {[catch { vlog -incr -sv \
     "+incdir+$ROOT/rtl/common_cells/include" \
     "+incdir+$ROOT/rtl/idma/include" \
     "+incdir+$ROOT/rtl/obi/include" \
-    "$ROOT/rtl/croc_chip.sv" \
+    "$ROOT/rtl/hft_chip.sv" \
 }]} {return 1}
 
 # Package(croc_soc) Target(netlist_yosys)

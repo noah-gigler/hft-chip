@@ -11,5 +11,5 @@ if {[catch { vlog -incr -sv \
     "$ROOT/rtl/arb_trader.sv" \
     "$ROOT/rtl/momentum_trader.sv" \
     "$ROOT/rtl/ema_trader.sv" \
-    "$ROOT/rtl/croc_chip.sv" \
+    "$ROOT/rtl/hft_chip.sv" \
 }]} {return 1}

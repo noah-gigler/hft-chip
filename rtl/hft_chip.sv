@@ -1,4 +1,4 @@
-module croc_chip import orderbook_pkg::*; #() (
+module hft_chip import orderbook_pkg::*; #() (
   input  wire clk_i,
   input  wire rst_ni,
 

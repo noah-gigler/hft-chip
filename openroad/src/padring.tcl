@@ -6,7 +6,7 @@
 # - Philippe Sauter <phsauter@iis.ee.ethz.ch>
 # Adapted for orderbook_chip
 #
-# All pad instance names are flat strings matching croc_chip.sv.
+# All pad instance names are flat strings matching hft_chip.sv.
 
 set numPadsPerEdge 16
 set cornerToPad [expr {$padBond + $padD}]
