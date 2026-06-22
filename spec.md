@@ -1,5 +1,10 @@
 # Spec
 
+## Output arbitration
+
+- Priority: arb > momentum > ema (fixed).
+- arb emits two trades on consecutive cycles (TRADE1 + TRADE2) with no grant; momentum and ema are blocked for both cycles.
+
 ## Price encoding
 
 - Price is `PRICE_WIDTH`-bit (0..511).
