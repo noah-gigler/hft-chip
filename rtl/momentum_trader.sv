@@ -9,11 +9,11 @@ module momentum_trader
     input  logic           clk_i,
     input  logic           rst_ni,
 
-    // orderbook
-    input  price_t [N-1:0] bid_prices_i,
-    input  qty_t   [N-1:0] bid_qtys_i,
-    input  price_t [N-1:0] ask_prices_i,
-    input  qty_t   [N-1:0] ask_qtys_i,
+    // orderbook — top-of-book only (best bid/ask)
+    input  price_t bid_price_i,
+    input  qty_t   bid_qty_i,
+    input  price_t ask_price_i,
+    input  qty_t   ask_qty_i,
 
     // running totals, summed incrementally in the orderbook
     input  logic [$clog2(N)+QTY_WIDTH-1:0] bid_qty_sum_i,
@@ -53,8 +53,8 @@ module momentum_trader
     qty_t order_qty_q, order_qty_d;
 
     // sums are maintained incrementally in the orderbook and arrive aligned
-    // with the qty arrays (same pipeline depth), so use them directly — no
-    // extra register, no N-wide adder, no delay skew vs the top-of-book checks.
+    // with the top-of-book inputs (same pipeline depth), so use them directly —
+    // no extra register, no N-wide adder, no delay skew vs the liquidity checks.
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
@@ -118,18 +118,18 @@ module momentum_trader
                 IDLE: begin
                     imb = signed'({1'b0, bid_qty_sum_i}) - signed'({1'b0, ask_qty_sum_i});
 
-                    buy_signal  = (imb >  IMB_THRESHOLD) && (pos_next < +MAX_POS) && ask_qtys_i[0] != 0;
-                    sell_signal = (imb < -IMB_THRESHOLD) && (pos_next > -MAX_POS) && bid_qtys_i[0] != 0;
+                    buy_signal  = (imb >  IMB_THRESHOLD) && (pos_next < +MAX_POS) && ask_qty_i != 0;
+                    sell_signal = (imb < -IMB_THRESHOLD) && (pos_next > -MAX_POS) && bid_qty_i != 0;
 
                     if (buy_signal) begin
                         order_side_d = Bid;
-                        order_price_d = ask_prices_i[0];
-                        order_qty_d = min3(ORDER_QTY, ask_qtys_i[0], MAX_POS - pos_next);
+                        order_price_d = ask_price_i;
+                        order_qty_d = min3(ORDER_QTY, ask_qty_i, MAX_POS - pos_next);
                         state_d = TRADE;
                     end else if (sell_signal) begin
                         order_side_d = Ask;
-                        order_price_d = bid_prices_i[0];
-                        order_qty_d = min3(ORDER_QTY, bid_qtys_i[0], MAX_POS + pos_next);
+                        order_price_d = bid_price_i;
+                        order_qty_d = min3(ORDER_QTY, bid_qty_i, MAX_POS + pos_next);
                         state_d = TRADE;
                     end
                 end

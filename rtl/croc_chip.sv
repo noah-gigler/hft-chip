@@ -127,11 +127,15 @@ module croc_chip import orderbook_pkg::*; #() (
   localparam int N = 32;
   assign out_spare0 = 1'b0;
 
+  // full-depth orderbook outputs (the books are maintained at full depth, but
+  // only top-of-book + the running sums are ever consumed downstream)
   price_t [3:0][N-1:0] bid_prices, ask_prices;
   qty_t   [3:0][N-1:0] bid_qtys,  ask_qtys;
 
-  price_t [3:0][N-1:0] bid_prices_q, ask_prices_q;
-  qty_t   [3:0][N-1:0] bid_qtys_q,   ask_qtys_q;
+  // pipeline stage between orderbooks and traders: only top-of-book is needed,
+  // so we register just level 0 (best bid/ask) per book instead of all N levels
+  price_t [3:0] bid_price0_q, ask_price0_q;
+  qty_t   [3:0] bid_qty0_q,   ask_qty0_q;
 
   // running per-side totals from the orderbooks (only market 2 is consumed,
   // by the momentum trader) plus their pipeline registers
@@ -141,19 +145,19 @@ module croc_chip import orderbook_pkg::*; #() (
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      for (int i = 0; i < 4; i++) begin
-        bid_prices_q[i] <= '{default: DEFAULT_BID};
-        bid_qtys_q[i]   <= '0;
-        ask_prices_q[i] <= '{default: DEFAULT_ASK};
-        ask_qtys_q[i]   <= '0;
-      end
+      bid_price0_q <= '{default: DEFAULT_BID};
+      ask_price0_q <= '{default: DEFAULT_ASK};
+      bid_qty0_q   <= '0;
+      ask_qty0_q   <= '0;
       bid_qty_sum2_q <= '0;
       ask_qty_sum2_q <= '0;
     end else begin
-      bid_prices_q <= bid_prices;
-      bid_qtys_q   <= bid_qtys;
-      ask_prices_q <= ask_prices;
-      ask_qtys_q   <= ask_qtys;
+      for (int i = 0; i < 4; i++) begin
+        bid_price0_q[i] <= bid_prices[i][0];
+        ask_price0_q[i] <= ask_prices[i][0];
+        bid_qty0_q[i]   <= bid_qtys[i][0];
+        ask_qty0_q[i]   <= ask_qtys[i][0];
+      end
       bid_qty_sum2_q <= bid_qty_sum2;
       ask_qty_sum2_q <= ask_qty_sum2;
     end
@@ -283,15 +287,15 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .bid_prices0_i (bid_prices_q[0]),
-    .bid_qtys0_i   (bid_qtys_q[0]),
-    .ask_prices0_i (ask_prices_q[0]),
-    .ask_qtys0_i   (ask_qtys_q[0]),
+    .bid_price0_i (bid_price0_q[0]),
+    .bid_qty0_i   (bid_qty0_q[0]),
+    .ask_price0_i (ask_price0_q[0]),
+    .ask_qty0_i   (ask_qty0_q[0]),
 
-    .bid_prices1_i (bid_prices_q[1]),
-    .bid_qtys1_i   (bid_qtys_q[1]),
-    .ask_prices1_i (ask_prices_q[1]),
-    .ask_qtys1_i   (ask_qtys_q[1]),
+    .bid_price1_i (bid_price0_q[1]),
+    .bid_qty1_i   (bid_qty0_q[1]),
+    .ask_price1_i (ask_price0_q[1]),
+    .ask_qty1_i   (ask_qty0_q[1]),
 
     .order_filled_i (valid_trader[0]),
     .filled_price_i (in_price),
@@ -310,10 +314,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .bid_prices_i (bid_prices_q[2]),
-    .bid_qtys_i   (bid_qtys_q[2]),
-    .ask_prices_i (ask_prices_q[2]),
-    .ask_qtys_i   (ask_qtys_q[2]),
+    .bid_price_i (bid_price0_q[2]),
+    .bid_qty_i   (bid_qty0_q[2]),
+    .ask_price_i (ask_price0_q[2]),
+    .ask_qty_i   (ask_qty0_q[2]),
     .bid_qty_sum_i (bid_qty_sum2_q),
     .ask_qty_sum_i (ask_qty_sum2_q),
 
@@ -335,10 +339,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .bid_prices_i (bid_prices_q[3]),
-    .bid_qtys_i   (bid_qtys_q[3]),
-    .ask_prices_i (ask_prices_q[3]),
-    .ask_qtys_i   (ask_qtys_q[3]),
+    .bid_price_i (bid_price0_q[3]),
+    .bid_qty_i   (bid_qty0_q[3]),
+    .ask_price_i (ask_price0_q[3]),
+    .ask_qty_i   (ask_qty0_q[3]),
 
     .order_filled_i (valid_trader[2]),
     .filled_price_i (in_price),

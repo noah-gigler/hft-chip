@@ -10,11 +10,11 @@ module ema_trader
     input  logic           clk_i,
     input  logic           rst_ni,
 
-    // orderbook
-    input  price_t [N-1:0] bid_prices_i,
-    input  qty_t   [N-1:0] bid_qtys_i,
-    input  price_t [N-1:0] ask_prices_i,
-    input  qty_t   [N-1:0] ask_qtys_i,
+    // orderbook — top-of-book only (best bid/ask)
+    input  price_t bid_price_i,
+    input  qty_t   bid_qty_i,
+    input  price_t ask_price_i,
+    input  qty_t   ask_qty_i,
 
     // private order feed
     input logic            order_filled_i,
@@ -100,9 +100,9 @@ module ema_trader
         qty_o    = '0;
         error_o  = error_d;
 
-        both_liquid = (bid_qtys_i[0] != 0) && (ask_qtys_i[0] != 0);
+        both_liquid = (bid_qty_i != 0) && (ask_qty_i != 0);
 
-        mid = ({1'b0, bid_prices_i[0]} + {1'b0, ask_prices_i[0]}) >> 1;
+        mid = ({1'b0, bid_price_i} + {1'b0, ask_price_i}) >> 1;
         mid_scaled = signed'({1'b0, mid}) <<< EMA_SHIFT;
 
         if (both_liquid) begin
@@ -142,13 +142,13 @@ module ema_trader
 
                     if (buy_signal) begin
                         order_side_d  = Bid;
-                        order_price_d = ask_prices_i[0];
-                        order_qty_d   = min3(ORDER_QTY, ask_qtys_i[0], MAX_POS - pos_next);
+                        order_price_d = ask_price_i;
+                        order_qty_d   = min3(ORDER_QTY, ask_qty_i, MAX_POS - pos_next);
                         state_d       = TRADE;
                     end else if (sell_signal) begin
                         order_side_d  = Ask;
-                        order_price_d = bid_prices_i[0];
-                        order_qty_d   = min3(ORDER_QTY, bid_qtys_i[0], MAX_POS + pos_next);
+                        order_price_d = bid_price_i;
+                        order_qty_d   = min3(ORDER_QTY, bid_qty_i, MAX_POS + pos_next);
                         state_d       = TRADE;
                     end
                 end

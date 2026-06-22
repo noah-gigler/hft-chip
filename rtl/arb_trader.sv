@@ -7,17 +7,17 @@ module arb_trader
     input  logic           clk_i,
     input  logic           rst_ni,
 
-    // orderbook #1
-    input  price_t [N-1:0] bid_prices0_i,
-    input  qty_t   [N-1:0] bid_qtys0_i,
-    input  price_t [N-1:0] ask_prices0_i,
-    input  qty_t   [N-1:0] ask_qtys0_i,
+    // orderbook #1 — top-of-book only (best bid/ask)
+    input  price_t bid_price0_i,
+    input  qty_t   bid_qty0_i,
+    input  price_t ask_price0_i,
+    input  qty_t   ask_qty0_i,
 
-    // orderbook #2
-    input  price_t [N-1:0] bid_prices1_i,
-    input  qty_t   [N-1:0] bid_qtys1_i,
-    input  price_t [N-1:0] ask_prices1_i,
-    input  qty_t   [N-1:0] ask_qtys1_i,
+    // orderbook #2 — top-of-book only (best bid/ask)
+    input  price_t bid_price1_i,
+    input  qty_t   bid_qty1_i,
+    input  price_t ask_price1_i,
+    input  qty_t   ask_qty1_i,
 
     // private order feed
     input logic            order_filled_i,
@@ -142,25 +142,25 @@ module arb_trader
             case (state_q)
 
                 IDLE: begin
-                    arb0 = bid_qtys0_i[0] > 0 && ask_qtys1_i[0] > 0 && (bid_prices0_i[0] > ask_prices1_i[0] + ARB_THRESHOLD);
-                    arb1 = bid_qtys1_i[0] > 0 && ask_qtys0_i[0] > 0 && (bid_prices1_i[0] > ask_prices0_i[0] + ARB_THRESHOLD);
+                    arb0 = bid_qty0_i > 0 && ask_qty1_i > 0 && (bid_price0_i > ask_price1_i + ARB_THRESHOLD);
+                    arb1 = bid_qty1_i > 0 && ask_qty0_i > 0 && (bid_price1_i > ask_price0_i + ARB_THRESHOLD);
 
                     if (arb0) begin
                         ask_market_d = '0;
                         bid_market_d = '1;
 
-                        ask_price_d  = bid_prices0_i[0];
-                        bid_price_d  = ask_prices1_i[0];
-                        arb_qty_d    = (bid_qtys0_i[0] < ask_qtys1_i[0]) ? bid_qtys0_i[0] : ask_qtys1_i[0];
+                        ask_price_d  = bid_price0_i;
+                        bid_price_d  = ask_price1_i;
+                        arb_qty_d    = (bid_qty0_i < ask_qty1_i) ? bid_qty0_i : ask_qty1_i;
 
                         state_d      = TRADE1;
                     end else if (arb1) begin
                         ask_market_d = '1;
                         bid_market_d = '0;
 
-                        ask_price_d  = bid_prices1_i[0];
-                        bid_price_d  = ask_prices0_i[0];
-                        arb_qty_d    = (bid_qtys1_i[0] < ask_qtys0_i[0]) ? bid_qtys1_i[0] : ask_qtys0_i[0];
+                        ask_price_d  = bid_price1_i;
+                        bid_price_d  = ask_price0_i;
+                        arb_qty_d    = (bid_qty1_i < ask_qty0_i) ? bid_qty1_i : ask_qty0_i;
 
                         state_d      = TRADE1;
                     end
@@ -196,10 +196,10 @@ module arb_trader
                             sell = (residual_q > 0);
                             res_qty = sell ? residual_q : (-residual_q); // value will be truncated
 
-                            price0    = sell ? bid_prices0_i[0] : ask_prices0_i[0];
-                            price1    = sell ? bid_prices1_i[0] : ask_prices1_i[0];
-                            quantity0 = sell ? bid_qtys0_i[0]   : ask_qtys0_i[0];
-                            quantity1 = sell ? bid_qtys1_i[0]   : ask_qtys1_i[0];
+                            price0    = sell ? bid_price0_i : ask_price0_i;
+                            price1    = sell ? bid_price1_i : ask_price1_i;
+                            quantity0 = sell ? bid_qty0_i   : ask_qty0_i;
+                            quantity1 = sell ? bid_qty1_i   : ask_qty1_i;
 
                             liquid0 = (quantity0 != 0);
                             liquid1 = (quantity1 != 0);

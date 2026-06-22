@@ -12,8 +12,6 @@
 // compare every cycle against the cycle-accurate golden model (arb_trader_model).
 
 static const int ARB_THRESHOLD = 2;   // matches rtl/arb_trader.sv default
-static const int PRICE_WORDS = (N * PRICE_WIDTH + 31) / 32;  // 9
-static const int QTY_WORDS   = (N * QTY_WIDTH   + 31) / 32;  // 8
 
 static int g_errors = 0, g_checks = 0;
 static VerilatedVcdC* g_tfp = nullptr;
@@ -21,34 +19,16 @@ static vluint64_t g_time = 0;
 
 static void dump() { if (g_tfp) g_tfp->dump(g_time); g_time++; }
 
-// pack value `val` of `width` bits into packed array at element index i
-static void set_field(uint32_t* arr, int i, int width, uint32_t val) {
-    int bit = i * width, word = bit / 32, off = bit % 32;
-    uint32_t mask = width == 32 ? ~0u : ((1u << width) - 1);
-    val &= mask;
-    arr[word] = (arr[word] & ~(mask << off)) | (val << off);
-    if (off + width > 32)
-        arr[word + 1] = (arr[word + 1] & ~(mask >> (32 - off))) | (val >> (32 - off));
-}
-
-static void pack_prices(uint32_t* arr, const price_t* p) {
-    memset(arr, 0, PRICE_WORDS * 4);
-    for (int i = 0; i < N; i++) set_field(arr, i, PRICE_WIDTH, p[i]);
-}
-static void pack_qtys(uint32_t* arr, const qty_t* q) {
-    memset(arr, 0, QTY_WORDS * 4);
-    for (int i = 0; i < N; i++) set_field(arr, i, QTY_WIDTH, q[i]);
-}
-
 static void drive_books(Varb_trader* dut, const book_t* b0, const book_t* b1) {
-    pack_prices(&dut->bid_prices0_i[0], b0->bid_prices);
-    pack_qtys  (&dut->bid_qtys0_i[0],   b0->bid_qtys);
-    pack_prices(&dut->ask_prices0_i[0], b0->ask_prices);
-    pack_qtys  (&dut->ask_qtys0_i[0],   b0->ask_qtys);
-    pack_prices(&dut->bid_prices1_i[0], b1->bid_prices);
-    pack_qtys  (&dut->bid_qtys1_i[0],   b1->bid_qtys);
-    pack_prices(&dut->ask_prices1_i[0], b1->ask_prices);
-    pack_qtys  (&dut->ask_qtys1_i[0],   b1->ask_qtys);
+    // arb_trader only consumes top-of-book (level 0) of each book
+    dut->bid_price0_i = b0->bid_prices[0];
+    dut->bid_qty0_i   = b0->bid_qtys[0];
+    dut->ask_price0_i = b0->ask_prices[0];
+    dut->ask_qty0_i   = b0->ask_qtys[0];
+    dut->bid_price1_i = b1->bid_prices[0];
+    dut->bid_qty1_i   = b1->bid_qtys[0];
+    dut->ask_price1_i = b1->ask_prices[0];
+    dut->ask_qty1_i   = b1->ask_qtys[0];
 }
 
 static bool compare(Varb_trader* dut, const trade_out_t& e, const char* label) {

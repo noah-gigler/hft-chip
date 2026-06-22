@@ -8,38 +8,21 @@
 #include "verilated_vcd_c.h"
 #include "momentum_trader.h"
 
-// momentum_trader unit TB. Full-depth book drives the registered qty sums;
-// compare every cycle against the cycle-accurate golden model.
-
-static const int PRICE_WORDS = (N * PRICE_WIDTH + 31) / 32;
-static const int QTY_WORDS   = (N * QTY_WIDTH   + 31) / 32;
+// momentum_trader unit TB. The DUT consumes top-of-book + the orderbook's
+// running qty sums; compare every cycle against the cycle-accurate golden model.
 
 static int g_errors = 0, g_checks = 0;
 static VerilatedVcdC* g_tfp = nullptr;
 static vluint64_t g_time = 0;
 static void dump() { if (g_tfp) g_tfp->dump(g_time); g_time++; }
 
-static void set_field(uint32_t* arr, int i, int width, uint32_t val) {
-    int bit = i * width, word = bit / 32, off = bit % 32;
-    uint32_t mask = width == 32 ? ~0u : ((1u << width) - 1);
-    val &= mask;
-    arr[word] = (arr[word] & ~(mask << off)) | (val << off);
-    if (off + width > 32)
-        arr[word + 1] = (arr[word + 1] & ~(mask >> (32 - off))) | (val >> (32 - off));
-}
-static void pack_prices(uint32_t* a, const price_t* p) {
-    memset(a, 0, PRICE_WORDS * 4); for (int i = 0; i < N; i++) set_field(a, i, PRICE_WIDTH, p[i]);
-}
-static void pack_qtys(uint32_t* a, const qty_t* q) {
-    memset(a, 0, QTY_WORDS * 4); for (int i = 0; i < N; i++) set_field(a, i, QTY_WIDTH, q[i]);
-}
 static void drive_book(Vmomentum_trader* dut, const book_t* b) {
-    pack_prices(&dut->bid_prices_i[0], b->bid_prices);
-    pack_qtys  (&dut->bid_qtys_i[0],   b->bid_qtys);
-    pack_prices(&dut->ask_prices_i[0], b->ask_prices);
-    pack_qtys  (&dut->ask_qtys_i[0],   b->ask_qtys);
-    // sums are now maintained in the orderbook and fed in; the DUT registers
-    // them once, matching the old internal reduction. Drive the full book sum.
+    // top-of-book (level 0)
+    dut->bid_price_i = b->bid_prices[0];
+    dut->bid_qty_i   = b->bid_qtys[0];
+    dut->ask_price_i = b->ask_prices[0];
+    dut->ask_qty_i   = b->ask_qtys[0];
+    // full-depth sums, as the orderbook maintains them
     uint32_t bsum = 0, asum = 0;
     for (int i = 0; i < N; i++) { bsum += b->bid_qtys[i]; asum += b->ask_qtys[i]; }
     dut->bid_qty_sum_i = bsum;
