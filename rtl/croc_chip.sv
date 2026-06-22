@@ -127,69 +127,25 @@ module croc_chip import orderbook_pkg::*; #() (
   localparam int N = 32;
   assign out_spare0 = 1'b0;
 
-  price_t [N-1:0] bid_prices0;
-  qty_t   [N-1:0] bid_qtys0;
-  price_t [N-1:0] ask_prices0;
-  qty_t   [N-1:0] ask_qtys0;
+  price_t [3:0][N-1:0] bid_prices, ask_prices;
+  qty_t   [3:0][N-1:0] bid_qtys,  ask_qtys;
 
-  price_t [N-1:0] bid_prices1;
-  qty_t   [N-1:0] bid_qtys1;
-  price_t [N-1:0] ask_prices1;
-  qty_t   [N-1:0] ask_qtys1;
-
-  price_t [N-1:0] bid_prices2;
-  qty_t   [N-1:0] bid_qtys2;
-  price_t [N-1:0] ask_prices2;
-  qty_t   [N-1:0] ask_qtys2;
-
-  price_t [N-1:0] bid_prices3;
-  qty_t   [N-1:0] bid_qtys3;
-  price_t [N-1:0] ask_prices3;
-  qty_t   [N-1:0] ask_qtys3;
-
-  // registered copies — break the wide N×(P+Q) bus wires off the critical path
-  // and give the router a proper driving cell midway between orderbooks and traders
-  price_t [N-1:0] bid_prices0_q, bid_prices1_q, bid_prices2_q, bid_prices3_q;
-  qty_t   [N-1:0] bid_qtys0_q,  bid_qtys1_q,  bid_qtys2_q,  bid_qtys3_q;
-  price_t [N-1:0] ask_prices0_q, ask_prices1_q, ask_prices2_q, ask_prices3_q;
-  qty_t   [N-1:0] ask_qtys0_q,  ask_qtys1_q,  ask_qtys2_q,  ask_qtys3_q;
+  price_t [3:0][N-1:0] bid_prices_q, ask_prices_q;
+  qty_t   [3:0][N-1:0] bid_qtys_q,   ask_qtys_q;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      // match orderbook reset: empty book has bids at DEFAULT_BID, asks at DEFAULT_ASK
-      bid_prices0_q <= {N{DEFAULT_BID}};
-      bid_qtys0_q   <= '0;
-      ask_prices0_q <= {N{DEFAULT_ASK}};
-      ask_qtys0_q   <= '0;
-      bid_prices1_q <= {N{DEFAULT_BID}};
-      bid_qtys1_q   <= '0;
-      ask_prices1_q <= {N{DEFAULT_ASK}};
-      ask_qtys1_q   <= '0;
-      bid_prices2_q <= {N{DEFAULT_BID}};
-      bid_qtys2_q   <= '0;
-      ask_prices2_q <= {N{DEFAULT_ASK}};
-      ask_qtys2_q   <= '0;
-      bid_prices3_q <= {N{DEFAULT_BID}};
-      bid_qtys3_q   <= '0;
-      ask_prices3_q <= {N{DEFAULT_ASK}};
-      ask_qtys3_q   <= '0;
+      for (int i = 0; i < 4; i++) begin
+        bid_prices_q[i] <= '{default: DEFAULT_BID};
+        bid_qtys_q[i]   <= '0;
+        ask_prices_q[i] <= '{default: DEFAULT_ASK};
+        ask_qtys_q[i]   <= '0;
+      end
     end else begin
-      bid_prices0_q <= bid_prices0; 
-      bid_qtys0_q   <= bid_qtys0; 
-      ask_prices0_q <= ask_prices0; 
-      ask_qtys0_q   <= ask_qtys0;
-      bid_prices1_q <= bid_prices1; 
-      bid_qtys1_q   <= bid_qtys1; 
-      ask_prices1_q <= ask_prices1; 
-      ask_qtys1_q   <= ask_qtys1;
-      bid_prices2_q <= bid_prices2; 
-      bid_qtys2_q   <= bid_qtys2; 
-      ask_prices2_q <= ask_prices2; 
-      ask_qtys2_q   <= ask_qtys2;
-      bid_prices3_q <= bid_prices3; 
-      bid_qtys3_q   <= bid_qtys3; 
-      ask_prices3_q <= ask_prices3; 
-      ask_qtys3_q   <= ask_qtys3;
+      bid_prices_q <= bid_prices;
+      bid_qtys_q   <= bid_qtys;
+      ask_prices_q <= ask_prices;
+      ask_qtys_q   <= ask_qtys;
     end
   end
 
@@ -256,10 +212,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .price_i      (in_price),
     .qty_i        (in_qty),
 
-    .bid_prices_o (bid_prices0),
-    .bid_qtys_o   (bid_qtys0),
-    .ask_prices_o (ask_prices0),
-    .ask_qtys_o   (ask_qtys0),
+    .bid_prices_o (bid_prices[0]),
+    .bid_qtys_o   (bid_qtys[0]),
+    .ask_prices_o (ask_prices[0]),
+    .ask_qtys_o   (ask_qtys[0]),
 
     .error_o      (error0)
   );
@@ -274,10 +230,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .price_i      (in_price),
     .qty_i        (in_qty),
 
-    .bid_prices_o (bid_prices1),
-    .bid_qtys_o   (bid_qtys1),
-    .ask_prices_o (ask_prices1),
-    .ask_qtys_o   (ask_qtys1),
+    .bid_prices_o (bid_prices[1]),
+    .bid_qtys_o   (bid_qtys[1]),
+    .ask_prices_o (ask_prices[1]),
+    .ask_qtys_o   (ask_qtys[1]),
 
     .error_o      (error1)
   );
@@ -292,10 +248,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .price_i      (in_price),
     .qty_i        (in_qty),
 
-    .bid_prices_o (bid_prices2),
-    .bid_qtys_o   (bid_qtys2),
-    .ask_prices_o (ask_prices2),
-    .ask_qtys_o   (ask_qtys2),
+    .bid_prices_o (bid_prices[2]),
+    .bid_qtys_o   (bid_qtys[2]),
+    .ask_prices_o (ask_prices[2]),
+    .ask_qtys_o   (ask_qtys[2]),
 
     .error_o      (error2)
   );
@@ -310,10 +266,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .price_i      (in_price),
     .qty_i        (in_qty),
 
-    .bid_prices_o (bid_prices3),
-    .bid_qtys_o   (bid_qtys3),
-    .ask_prices_o (ask_prices3),
-    .ask_qtys_o   (ask_qtys3),
+    .bid_prices_o (bid_prices[3]),
+    .bid_qtys_o   (bid_qtys[3]),
+    .ask_prices_o (ask_prices[3]),
+    .ask_qtys_o   (ask_qtys[3]),
 
     .error_o      (error3)
   );
@@ -322,15 +278,15 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .bid_prices0_i (bid_prices0_q),
-    .bid_qtys0_i   (bid_qtys0_q),
-    .ask_prices0_i (ask_prices0_q),
-    .ask_qtys0_i   (ask_qtys0_q),
+    .bid_prices0_i (bid_prices_q[0]),
+    .bid_qtys0_i   (bid_qtys_q[0]),
+    .ask_prices0_i (ask_prices_q[0]),
+    .ask_qtys0_i   (ask_qtys_q[0]),
 
-    .bid_prices1_i (bid_prices1_q),
-    .bid_qtys1_i   (bid_qtys1_q),
-    .ask_prices1_i (ask_prices1_q),
-    .ask_qtys1_i   (ask_qtys1_q),
+    .bid_prices1_i (bid_prices_q[1]),
+    .bid_qtys1_i   (bid_qtys_q[1]),
+    .ask_prices1_i (ask_prices_q[1]),
+    .ask_qtys1_i   (ask_qtys_q[1]),
 
     .order_filled_i (valid_trader0),
     .filled_price_i (in_price),
@@ -349,10 +305,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .bid_prices_i (bid_prices2_q),
-    .bid_qtys_i   (bid_qtys2_q),
-    .ask_prices_i (ask_prices2_q),
-    .ask_qtys_i   (ask_qtys2_q),
+    .bid_prices_i (bid_prices_q[2]),
+    .bid_qtys_i   (bid_qtys_q[2]),
+    .ask_prices_i (ask_prices_q[2]),
+    .ask_qtys_i   (ask_qtys_q[2]),
 
     .order_filled_i (valid_trader1),
     .filled_price_i (in_price),
@@ -372,10 +328,10 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .bid_prices_i (bid_prices3_q),
-    .bid_qtys_i   (bid_qtys3_q),
-    .ask_prices_i (ask_prices3_q),
-    .ask_qtys_i   (ask_qtys3_q),
+    .bid_prices_i (bid_prices_q[3]),
+    .bid_qtys_i   (bid_qtys_q[3]),
+    .ask_prices_i (ask_prices_q[3]),
+    .ask_qtys_i   (ask_qtys_q[3]),
 
     .order_filled_i (valid_trader2),
     .filled_price_i (in_price),
