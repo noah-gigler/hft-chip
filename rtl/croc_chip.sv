@@ -149,8 +149,10 @@ module croc_chip import orderbook_pkg::*; #() (
     end
   end
 
-  logic error0, error1, error2, error3, error4, error5, error6;
-  logic valid_ob0, valid_ob1, valid_ob2, valid_ob3, valid_trader0, valid_trader1, valid_trader2;
+  logic [3:0] error_ob;
+  logic [2:0] error_trader;
+  logic [3:0] valid_ob;
+  logic [2:0] valid_trader;
 
   logic   valid_arb, valid_mom, valid_ema;
   side_t  side_arb, side_mom, side_ema;
@@ -187,18 +189,17 @@ module croc_chip import orderbook_pkg::*; #() (
           out_side   <= valid_arb ? side_arb : valid_mom ? side_mom : side_ema;
           out_price  <= valid_arb ? price_arb : valid_mom ? price_mom : price_ema;
           out_qty    <= valid_arb ? qty_arb   : valid_mom ? qty_mom   : qty_ema;
-          out_error  <= error0 | error1 | error2 | error3 | error4 | error5 | error6;
+          out_error  <= |error_ob | |error_trader;
       end
   end
 
-  assign valid_ob0 = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 0);
-  assign valid_ob1 = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 1);
-  assign valid_ob2 = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 2);
-  assign valid_ob3 = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 3);
-
-  assign valid_trader0 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market < 2);
-  assign valid_trader1 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market == 2);
-  assign valid_trader2 = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market == 3);
+  always_comb begin
+    for (int i = 0; i < 4; i++)
+      valid_ob[i] = in_valid & (msg_type_t'(in_message_type) == Public) & (in_market == 2'(i));
+    valid_trader[0] = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market < 2);
+    valid_trader[1] = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market == 2);
+    valid_trader[2] = in_valid & (msg_type_t'(in_message_type) == Private) & (in_market == 3);
+  end
 
 
 
@@ -206,7 +207,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .valid_i      (valid_ob0),
+    .valid_i      (valid_ob[0]),
     .op_i         (op_t'(in_op)),
     .side_i       (side_t'(in_side)),
     .price_i      (in_price),
@@ -217,14 +218,14 @@ module croc_chip import orderbook_pkg::*; #() (
     .ask_prices_o (ask_prices[0]),
     .ask_qtys_o   (ask_qtys[0]),
 
-    .error_o      (error0)
+    .error_o      (error_ob[0])
   );
 
   orderbook #(.N(N)) orderbook1_i (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .valid_i      (valid_ob1),
+    .valid_i      (valid_ob[1]),
     .op_i         (op_t'(in_op)),
     .side_i       (side_t'(in_side)),
     .price_i      (in_price),
@@ -235,14 +236,14 @@ module croc_chip import orderbook_pkg::*; #() (
     .ask_prices_o (ask_prices[1]),
     .ask_qtys_o   (ask_qtys[1]),
 
-    .error_o      (error1)
+    .error_o      (error_ob[1])
   );
 
   orderbook #(.N(N)) orderbook2_i (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .valid_i      (valid_ob2),
+    .valid_i      (valid_ob[2]),
     .op_i         (op_t'(in_op)),
     .side_i       (side_t'(in_side)),
     .price_i      (in_price),
@@ -253,14 +254,14 @@ module croc_chip import orderbook_pkg::*; #() (
     .ask_prices_o (ask_prices[2]),
     .ask_qtys_o   (ask_qtys[2]),
 
-    .error_o      (error2)
+    .error_o      (error_ob[2])
   );
 
   orderbook #(.N(N)) orderbook3_i (
     .clk_i        (clk),
     .rst_ni       (rst_n),
 
-    .valid_i      (valid_ob3),
+    .valid_i      (valid_ob[3]),
     .op_i         (op_t'(in_op)),
     .side_i       (side_t'(in_side)),
     .price_i      (in_price),
@@ -271,7 +272,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .ask_prices_o (ask_prices[3]),
     .ask_qtys_o   (ask_qtys[3]),
 
-    .error_o      (error3)
+    .error_o      (error_ob[3])
   );
 
   arb_trader #(.N(N)) arb_trader_i (
@@ -288,7 +289,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .ask_prices1_i (ask_prices_q[1]),
     .ask_qtys1_i   (ask_qtys_q[1]),
 
-    .order_filled_i (valid_trader0),
+    .order_filled_i (valid_trader[0]),
     .filled_price_i (in_price),
     .filled_qty_i   (in_qty),
     .filled_side_i  (side_t'(in_side)),
@@ -298,7 +299,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .side_o   (side_arb),
     .price_o  (price_arb),
     .qty_o    (qty_arb),
-    .error_o  (error4)
+    .error_o  (error_trader[0])
   );
 
   momentum_trader #(.N(N)) mom_trader_i (
@@ -310,7 +311,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .ask_prices_i (ask_prices_q[2]),
     .ask_qtys_i   (ask_qtys_q[2]),
 
-    .order_filled_i (valid_trader1),
+    .order_filled_i (valid_trader[1]),
     .filled_price_i (in_price),
     .filled_qty_i   (in_qty),
     .filled_side_i  (side_t'(in_side)),
@@ -321,7 +322,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .side_o   (side_mom),
     .price_o  (price_mom),
     .qty_o    (qty_mom),
-    .error_o  (error5)
+    .error_o  (error_trader[1])
   );
 
   ema_trader #(.N(N)) ema_trader_i (
@@ -333,7 +334,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .ask_prices_i (ask_prices_q[3]),
     .ask_qtys_i   (ask_qtys_q[3]),
 
-    .order_filled_i (valid_trader2),
+    .order_filled_i (valid_trader[2]),
     .filled_price_i (in_price),
     .filled_qty_i   (in_qty),
     .filled_side_i  (side_t'(in_side)),
@@ -344,7 +345,7 @@ module croc_chip import orderbook_pkg::*; #() (
     .side_o   (side_ema),
     .price_o  (price_ema),
     .qty_o    (qty_ema),
-    .error_o  (error6)
+    .error_o  (error_trader[2])
   );
 
 endmodule
