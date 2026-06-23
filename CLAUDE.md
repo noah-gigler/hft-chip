@@ -76,9 +76,21 @@ Spec lists these as `croc_lvs.v`, `croc.def`, `croc.odb`, `croc.sdc`, `croc.v`, 
 
 ## Flow
 
-RTL (SystemVerilog) → synthesis (Yosys) → floorplan/place/route (OpenROAD) → DRC/LVS (KLayout/Calibre)
+RTL (SystemVerilog) → synthesis (Yosys) → floorplan/place/route (OpenROAD) → GDS + DRC (KLayout) → LVS (Calibre)
 
-Process: IHP SG13G2 (130nm). Dependencies via Bender.
+Process: IHP SG13G2 (130nm). Dependencies via Bender. All steps run inside `oseda` except Calibre LVS (native SEPP tool). PROJ_NAME=hft, top=hft_chip.
+
+Run order (on remote, from repo root):
+- Synth: `cd yosys && ./run_synthesis.sh --flist` (regenerate `src/hft.flist` via Bender) then `./run_synthesis.sh --synth` → `out/hft_yosys.v`
+- Backend: `cd openroad && ./run_backend.sh --all` (or `--floorplan/--placement/--cts/--routing/--finishing`) → `out/hft.{def,odb,sdc,v}`, `out/hft_lvs.v`
+- GDS: `cd klayout && ./def2gds-hft` → `out/hft.gds`
+- DRC: `cd klayout && ./run_drc-hft` (flags `--no_recommended --no_density --antenna`); results in `drc/out/*.lyrdb`
+- LVS (Calibre, not KLayout — `klayout/run_lvs-hft` is unused):
+  1. `cd calibre/lvs && ./verilog2spice ../../openroad/out/hft_lvs.v hft_chip.spice`
+  2. adapt runset: `sed -e 's|"croc_chip.calibre.db"|"<abs>/klayout/out/hft.gds"|' -e 's/croc_chip/hft_chip/g' _lvs.tvf_ > _lvs_hft.tvf_`
+  3. `csh -c 'source .setPDK.csh; cd calibre/lvs; calibre-2021.3 calibre -lvs -hier -turbo 8 _lvs_hft.tvf_'` → `hft_chip.lvs.report`
+
+LVS gotchas: must use **calibre-2021.3** (default `calibre` symlink is 2018.2, too old for the PDK tvf rules); must `source .setPDK.csh` first (sets `IHP_TECH`); the SEPP wrapper takes `calibre calibre ...` (wrapper name + engine), and tvf is auto-detected via `#!tvf` (no `-tvf` flag).
 
 ## Testbench
 
