@@ -81,3 +81,4 @@
 #/openroad/src
 #yosys
 /yosys/out
+/artifacts
