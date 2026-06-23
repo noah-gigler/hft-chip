@@ -31,14 +31,20 @@ LVS=$(grep -E '^[[:space:]]+(CORRECT|INCORRECT)' calibre/lvs/hft_chip.lvs.report
 
 # --- snapshot ---
 D="artifacts/n${LABEL}-signoff"
-mkdir -p "$D"/openroad "$D"/klayout "$D"/calibre
+mkdir -p "$D"/openroad "$D"/klayout "$D"/calibre "$D"/logs "$D"/reports
 cp openroad/out/hft.def openroad/out/hft.odb openroad/out/hft.sdc openroad/out/hft.v openroad/out/hft_lvs.v "$D"/openroad/
 cp klayout/out/hft.gds "$D"/klayout/
 cp calibre/lvs/hft_chip.spice calibre/lvs/hft_chip.lvs.report "$D"/calibre/
+cp openroad/logs/*.log "$D"/logs/ 2>/dev/null || true
+cp openroad/reports/*.rpt "$D"/reports/ 2>/dev/null || true
+cp klayout/drc_run.log calibre/lvs/lvs_hft_run.log calibre/lvs/v2s.log "$D"/logs/ 2>/dev/null || true
+
+UTIL=$(grep -E 'Utilization' openroad/logs/02_placement.log | tail -1 | sed 's/.*Utilization:/Utilization:/')
 {
   echo "label=n${LABEL}, commit $(git rev-parse --short HEAD)"
   echo "DRC: ${DRC} violations"
   echo "LVS: ${LVS}"
+  echo "${UTIL}"
   echo "timing:"
   grep -E 'wns max|tns max|worst slack max' openroad/reports/05_hft.final.rpt | sed 's/^/  /'
 } > "$D"/README.txt
