@@ -1,7 +1,7 @@
 module orderbook
     import orderbook_pkg::*;
 #(
-    parameter int N = 8
+    parameter int N
 )(
     input logic clk_i,
     input logic rst_ni,

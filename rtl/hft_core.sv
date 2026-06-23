@@ -1,5 +1,5 @@
 module hft_core import orderbook_pkg::*; #(
-    parameter int N = 64
+    parameter int N
 )(
     input  logic                   clk_i,
     input  logic                   rst_ni,

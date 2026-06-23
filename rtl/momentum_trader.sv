@@ -1,7 +1,7 @@
 module momentum_trader
     import orderbook_pkg::*;
 #(
-    parameter int N = 8,
+    parameter int N,
     parameter int IMB_THRESHOLD = 2,
     parameter int ORDER_QTY = 32,
     parameter int MAX_POS = 8*ORDER_QTY
