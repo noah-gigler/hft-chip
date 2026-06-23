@@ -27,7 +27,7 @@ cd "$ROOT"/calibre/lvs
 cd "$ROOT"
 csh -c 'source .setPDK.csh; cd calibre/lvs; calibre-2021.3 calibre -lvs -hier -turbo 8 _lvs_hft.tvf_' \
     > calibre/lvs/lvs_hft_run.log 2>&1
-LVS=$(grep -iE 'CORRECT|INCORRECT' calibre/lvs/hft_chip.lvs.report | head -1 | awk '{print $1}')
+LVS=$(grep -E '^[[:space:]]+(CORRECT|INCORRECT)' calibre/lvs/hft_chip.lvs.report | head -1 | awk '{print $1}')
 
 # --- snapshot ---
 D="artifacts/n${LABEL}-signoff"
