@@ -49,10 +49,10 @@ set_routing_layers -signal Metal2-TopMetal1 -clock Metal2-TopMetal1
 
 utl::report "Global route"
 global_route -guide_file ${report_dir}/04_${proj_name}_route.guide \
-    -congestion_report_file ${report_dir}/04_${proj_name}_route_congestionrpt \
-    -allow_congestion
-# Default params but -allow_congestion
-# It continues even if it didn't find a solution (may be able to fix afterwards)
+    -congestion_report_file ${report_dir}/04_${proj_name}_route_congestionrpt
+#    -allow_congestion
+# -allow_congestion disabled: let GR fail fast on congestion instead of handing an
+# unroutable design to detailed routing (which then burns hours on huge DRC counts).
 
 utl::report "Estimate parasitics"
 estimate_parasitics -global_routing
@@ -72,7 +72,8 @@ repair_timing -hold -hold_margin 0.1 -verbose -repair_tns 100
 
 utl::report "GRT incremental..."
 # Run to get modified net by DPL
-global_route -start_incremental -allow_congestion
+global_route -start_incremental
+#                              -allow_congestion (disabled, see above)
 
 # Running DPL to fix overlapped instances
 detailed_placement
@@ -81,8 +82,8 @@ detailed_placement
 global_route -end_incremental \
             -guide_file ${report_dir}/04_${proj_name}_route.guide \
             -congestion_report_file ${report_dir}/04_${proj_name}_route_congestion.rpt \
-            -allow_congestion \
             -verbose
+#            -allow_congestion (disabled, see above)
 
 estimate_parasitics -global_routing
 report_metrics "04-01_${proj_name}.grt_repaired"
