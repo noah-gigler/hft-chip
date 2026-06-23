@@ -66,6 +66,10 @@ utl::report "###################################################################
 
 set_thread_count 8
 
+# Cell padding: leave a site of whitespace on each side so the router has room
+# for legal Metal1 pin-access vias (clears Metal1 pin-access spacing slivers)
+set_placement_padding -global -left 1 -right 1
+
 # global_placement parameters:
 # density:            In every part of the chip, about N% of the area is occupied by standard cells
 # routability_driven: Reduce density target when there are a lot of wires in an area
