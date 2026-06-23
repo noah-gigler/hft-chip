@@ -139,7 +139,7 @@ module hft_chip import orderbook_pkg::*; #() (
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio2 ();
   (* dont_touch = "true" *) sg13cmos5l_IOPadIOVss pad_vssio3 ();
 
-  localparam int N = 48;
+  localparam int N = 64;
 
   // input boundary register: pad -> core
   always_ff @(posedge clk or negedge rst_n) begin
