@@ -28,11 +28,13 @@ Standard VLSI2 track: extend Croc SoC (RISC-V + UART + JTAG) on IHP SG13G2 130nm
 
 ### Submission — June 30, 2026, 10:00am CEST
 
-Single `.tar.gz` (named per group username) containing:
-- Report PDF (≤16 pages), `.cockpitrc`
+Submitted via Nextcloud as `vlsi2_19fs26.tar.gz` containing:
+- `vlsi2_19fs26.pdf` (report, ≤16 pages), `.cockpitrc`
 - `openroad/out/`: `hft_lvs.v`, `hft.def`, `hft.odb`, `hft.sdc`, `hft.v`
 - `klayout/out/hft.gds`
 - `rtl/`, `sw/`, `tb/`
+
+Spec lists these as `croc_lvs.v`, `croc.def`, `croc.odb`, `croc.sdc`, `croc.v`, `croc.gds`. We emit `hft.*` (PROJ_NAME=hft, top=hft_chip). Pending TA confirmation that `hft.*` names are accepted for the custom ASIC.
 
 ### Grading
 
