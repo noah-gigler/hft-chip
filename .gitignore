@@ -85,3 +85,7 @@
 # report
 /report/results/*.csv
 /report/figures/*.png
+# tb
+/tb/model
+/tb/obj_equiv*
+/tb/*_scenario.csv
