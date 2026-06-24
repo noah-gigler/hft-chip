@@ -5,7 +5,7 @@ OBJ       := obj_dir
 
 VERILATOR := verilator
 # -Wno-fatal: traders infer latches on combinational temp vars (intentional); don't abort
-VFLAGS := --cc --exe --build --trace -Wno-fatal
+VFLAGS := --cc --exe --build --trace --assert -Wno-fatal
 
 # random run knobs (override: make sim SEED=2 NOPS=1000000)
 SEED ?= 1
