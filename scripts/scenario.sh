@@ -9,10 +9,11 @@ RDIR=/scratch/vlsi2_19fs26/hft-chip
 here() { cd "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"; }
 
 trader="${1:-}"
+plot_opts=()
 case "$trader" in
   ema)      target=ema_scenario;      csv=ema_scenario.csv;      title=EMA ;;
   momentum) target=momentum_scenario; csv=momentum_scenario.csv; title=Momentum ;;
-  arb)      target=arb_scenario;      csv=arb_scenario.csv;      title=Arb ;;
+  arb)      target=arb_scenario;      csv=arb_scenario.csv;      title=Arb; plot_opts+=(--two-mids) ;;
   *) echo "usage: scenario.sh {ema|momentum|arb}" >&2; exit 2 ;;
 esac
 
@@ -23,4 +24,4 @@ mkdir -p report/results report/figures
 scp "$REMOTE:$RDIR/tb/$csv" "report/results/$csv"
 
 .venv/bin/python scripts/plot_scenario.py "report/results/$csv" --title "$title" \
-  --out "report/figures/${trader}_scenario.png"
+  --out "report/figures/${trader}_scenario.png" "${plot_opts[@]+"${plot_opts[@]}"}"

@@ -26,6 +26,7 @@
 
 static const int ARB_THRESHOLD = 2;     // matches rtl/arb_trader.sv default
 enum { MSG_PUBLIC = 0, MSG_PRIVATE = 1 };
+static const int WARMUP_CYCLES = 20;    // scenario CSVs skip the cold-start blip before quotes settle
 
 static int g_errors = 0, g_checks = 0;
 static long g_cov_valid = 0, g_cov_arb = 0, g_cov_mom = 0, g_cov_ema = 0, g_cov_oberr = 0;
@@ -257,7 +258,7 @@ static void scenario_ema(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
     reset(dut, m);
 
     FILE* f = fopen(csv_path, "w");
-    fprintf(f, "cycle,mid_target,book_mid,fill_side,fill_qty,fill_price,position,mtm_pnl,error,pending,state\n");
+    fprintf(f, "cycle,mid_target,book_mid,fill_side,fill_qty,fill_price,position,mtm_pnl,error,pending,state,fill_cycle\n");
 
     const double mu    = (double)PRICE_MAX / 2.0;
     const double theta = 0.1;
@@ -276,6 +277,7 @@ static void scenario_ema(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
     price_t bid_price = 0, ask_price = 0, old_bid_price = 0, old_ask_price = 0;
     qty_t   bid_qty = 0,   ask_qty = 0,   old_bid_qty = 0,   old_ask_qty = 0;
     int fill_cooldown = 0;
+    int order_placed_cycle = 0;   // cycle the currently-resting order was quoted at
 
     for (int i = 0; i < ncyc; i++) {
         if (i % 8 == 0) {
@@ -334,6 +336,7 @@ static void scenario_ema(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
 
         int16_t pos_before = m->ema.position;
         price_t order_price_before = m->ema.order_price;
+        ema_state_e state_before = m->ema.state;
 
         char label[40]; snprintf(label, sizeof label, "ema_scn#%d", i);
         if (!cycle(dut, m, in, label)) {
@@ -341,6 +344,9 @@ static void scenario_ema(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
             fclose(f);
             return;
         }
+
+        // new order just got quoted this cycle -> remember where to anchor its fill(s)
+        if (state_before == EMA_IDLE && m->ema.state == EMA_TRADE) order_placed_cycle = i;
 
         int delta = (int)m->ema.position - (int)pos_before;
         bool filled = delta != 0;
@@ -353,12 +359,216 @@ static void scenario_ema(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
 
         double book_mid = ((double)m->ob[3].bid_prices[0] + (double)m->ob[3].ask_prices[0]) / 2.0;
         double mtm_pnl = cash + (double)m->ema.position * book_mid;   // mark the open position to the current mid
-        fprintf(f, "%d,%.2f,%.2f,%d,%u,%u,%d,%.2f,%d,%d,%d\n", i, mid_target, book_mid,
-                filled ? (int)fside : -1, filled ? fqty : 0, filled ? fprice : 0,
-                (int)m->ema.position, mtm_pnl, (int)m->ema.error, (int)m->ema.pending, (int)m->ema.state);
+        if (i >= WARMUP_CYCLES)   // skip the cold-start blip before quotes are established
+            fprintf(f, "%d,%.2f,%.2f,%d,%u,%u,%d,%.2f,%d,%d,%d,%d\n", i, mid_target, book_mid,
+                    filled ? (int)fside : -1, filled ? fqty : 0, filled ? fprice : 0,
+                    (int)m->ema.position, mtm_pnl, (int)m->ema.error, (int)m->ema.pending, (int)m->ema.state,
+                    filled ? order_placed_cycle : -1);
     }
     fclose(f);
     printf("scenario final cash=%.2f position=%d\n", cash, (int)m->ema.position);
+}
+
+// ---------------- directed scenario: cross-market arbitrage ----------------
+// Drives markets 0 and 1's real orderbooks with correlated price processes
+// (shared common factor + per-market idiosyncratic noise + occasional
+// decorrelation shocks) so genuine bid0>ask1+threshold / bid1>ask0+threshold
+// crossings appear periodically. Markets 2/3 stay idle. For the report's PnL
+// plot, not correctness fuzzing -- every cycle is still checked against
+// ChipModel. CSV reuses scenario_ema's column layout (market0 mid in
+// mid_target, market1 mid in book_mid) so plot_scenario.py needs no changes.
+static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, const char* csv_path) {
+    printf("=== scenario: arb seed=%u ncyc=%d -> %s ===\n", seed, ncyc, csv_path);
+    std::mt19937 rng(seed);
+    std::normal_distribution<double> noise(0.0, 1.0);
+    auto rnd = [&](int lo, int hi) { return (int)(rng() % (hi - lo + 1)) + lo; };
+    reset(dut, m);
+
+    FILE* f = fopen(csv_path, "w");
+    fprintf(f, "cycle,mid_target,book_mid,fill_side,fill_qty,fill_price,position,mtm_pnl,error,pending,state,fill_cycle\n");
+
+    const double mu     = (double)PRICE_MAX / 2.0;
+    const int    spread = 2;
+    const int    qty    = 40;
+    // shared OU process for both markets' common price level (strongly
+    // correlated by construction -- mid0/mid1 differ only by `basis` below),
+    // plus a second small OU process for the basis (mid1 - mid0) itself.
+    // theta_c/sigma_c keep `common` wandering around mu without pinning at
+    // the clamp; theta_b/sigma_b are tuned so `basis` only occasionally
+    // drifts past +/-ARB_THRESHOLD, giving smooth, small arb windows instead
+    // of synthetic on/off shocks.
+    const double theta_c = 0.02, sigma_c = 1.2;
+    const double theta_b = 0.05, sigma_b = 0.9;
+    double common = mu;
+    double basis  = 0.0;
+    double cash = 0.0;
+
+    // two independent insert-before-remove quote FSMs, one per market,
+    // alternating turns since only one pad message fits per cycle
+    enum QuotePhase { PH_INSERT_BID, PH_REMOVE_BID, PH_INSERT_ASK, PH_REMOVE_ASK };
+    int     phase[2]         = { PH_INSERT_BID, PH_INSERT_BID };
+    price_t bid_price[2]     = { 0, 0 }, ask_price[2]     = { 0, 0 };
+    price_t old_bid_price[2] = { 0, 0 }, old_ask_price[2] = { 0, 0 };
+    qty_t   bid_qty[2]       = { 0, 0 }, ask_qty[2]       = { 0, 0 };
+    qty_t   old_bid_qty[2]   = { 0, 0 }, old_ask_qty[2]   = { 0, 0 };
+    int turn = 0;   // which market's quote FSM gets to act this cycle
+
+    // owed-fill FIFO: at most an Ask leg + a Bid leg outstanding at once
+    // (FLATTEN's own closing order only appears once both are resolved).
+    // `cycle` is the order's PLACEMENT cycle (when arb_step emitted it), kept
+    // alongside price so the fill marker can be plotted where the order was
+    // actually quoted, not wherever it happens to land after fill latency.
+    struct OwedFill { ob_side_t side; qty_t qty; price_t price; bool full_only; int cycle; };
+    OwedFill owed[2]; int owed_head = 0, owed_count = 0;
+    auto push_owed = [&](ob_side_t side, qty_t q, price_t price, bool full_only, int placed_cycle) {
+        if (owed_count >= 2) return;   // shouldn't happen; see plan notes
+        owed[(owed_head + owed_count) % 2] = OwedFill{ side, q, price, full_only, placed_cycle };
+        owed_count++;
+    };
+    int fill_cooldown = 0;
+
+    // A message sent on iteration i only lands in model_advance on iteration
+    // i+1 (registered input). So the fill we *send* this loop iteration must
+    // be credited to cash/logged on the NEXT iteration, when m->arb.residual
+    // actually moves -- not synchronously, or cash and residual go out of
+    // sync for one cycle and mtm_pnl spikes.
+    bool in_flight_valid = false;
+    OwedFill in_flight{ Bid, 0, 0, false, 0 };
+
+    for (int i = 0; i < ncyc; i++) {
+        // --- correlated price process: shared OU common factor + OU basis ---
+        common += theta_c * (mu - common) + sigma_c * noise(rng);
+        if (common < spread + 4) common = spread + 4;
+        if (common > (double)PRICE_MAX - spread - 4) common = PRICE_MAX - spread - 4;
+        basis += -theta_b * basis + sigma_b * noise(rng);
+
+        double mid[2] = { common - basis / 2.0, common + basis / 2.0 };
+        for (int k = 0; k < 2; k++) {
+            if (mid[k] < spread + 2) mid[k] = spread + 2;
+            if (mid[k] > (double)PRICE_MAX - spread - 2) mid[k] = PRICE_MAX - spread - 2;
+        }
+
+        // --- decide this cycle's single pad message: owed fill, or a quote step ---
+        InMsg in{ false, 0, 0, Insert, Bid, 0, 0 };
+        bool sending_fill = false; ob_side_t sent_side = Bid; qty_t sent_qty = 0; price_t sent_price = 0;
+        int sent_cycle = 0;
+
+        if (fill_cooldown > 0) fill_cooldown--;
+        if (fill_cooldown == 0 && owed_count > 0 && rnd(0, 4) < 4) {
+            OwedFill o = owed[owed_head];
+            qty_t fqty = o.qty;
+            if (!o.full_only && rnd(0, 4) == 0)   // ~20% of non-flatten legs: partial fill
+                fqty = o.qty > 1 ? (qty_t)rnd(1, o.qty - 1) : o.qty;
+            in = InMsg{ true, MSG_PRIVATE, 0, Insert, o.side, 0, fqty };
+            sending_fill = true; sent_side = o.side; sent_qty = fqty; sent_price = o.price; sent_cycle = o.cycle;
+            owed_head = (owed_head + 1) % 2; owed_count--;
+            fill_cooldown = 3;
+        } else {
+            int k = turn; turn ^= 1;
+            switch (phase[k]) {
+            case PH_INSERT_BID: {
+                double bp = mid[k] - spread / 2.0;
+                if (bp < 1) bp = 1; if (bp > PRICE_MAX - 1) bp = PRICE_MAX - 1;
+                old_bid_price[k] = bid_price[k]; old_bid_qty[k] = bid_qty[k];
+                bid_price[k] = (price_t)bp; bid_qty[k] = (qty_t)qty;
+                in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Insert, Bid, bid_price[k], bid_qty[k] };
+                phase[k] = PH_REMOVE_BID;
+                break;
+            }
+            case PH_REMOVE_BID:
+                if (old_bid_qty[k] > 0)
+                    in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Remove, Bid, old_bid_price[k], old_bid_qty[k] };
+                old_bid_qty[k] = 0;
+                phase[k] = PH_INSERT_ASK;
+                break;
+            case PH_INSERT_ASK: {
+                double ap = mid[k] + spread / 2.0;
+                if (ap < 1) ap = 1; if (ap > PRICE_MAX - 1) ap = PRICE_MAX - 1;
+                old_ask_price[k] = ask_price[k]; old_ask_qty[k] = ask_qty[k];
+                ask_price[k] = (price_t)ap; ask_qty[k] = (qty_t)qty;
+                in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Insert, Ask, ask_price[k], ask_qty[k] };
+                phase[k] = PH_REMOVE_ASK;
+                break;
+            }
+            case PH_REMOVE_ASK:
+                if (old_ask_qty[k] > 0)
+                    in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Remove, Ask, old_ask_price[k], old_ask_qty[k] };
+                old_ask_qty[k] = 0;
+                phase[k] = PH_INSERT_BID;
+                break;
+            }
+        }
+
+        // snapshot model state BEFORE cycle() to detect what arb_step is about to emit
+        int     state_before    = (int)m->arb.state;
+        int16_t residual_before = m->arb.residual;
+        uint8_t pending_before  = m->arb.pending;
+        price_t ask_price_before = m->arb.ask_price, bid_price_before = m->arb.bid_price;
+        qty_t   arb_qty_before   = m->arb.arb_qty;
+        book_t  copy0_before = m->copy[0], copy1_before = m->copy[1];
+
+        char label[40]; snprintf(label, sizeof label, "arb_scn#%d", i);
+        if (!cycle(dut, m, in, label)) {
+            printf("  (mismatch at cycle %d)\n", i);
+            fclose(f);
+            return;
+        }
+
+        // a leg/flatten order just got emitted this cycle -> queue the fill it needs
+        if (state_before == ARB_TRADE1)
+            push_owed(Ask, arb_qty_before, ask_price_before, false, i);
+        else if (state_before == ARB_TRADE2)
+            push_owed(Bid, arb_qty_before, bid_price_before, false, i);
+        else if (state_before == ARB_FLATTEN && pending_before == 0 && residual_before != 0) {
+            // mirrors sw/arb_trader.c's FLATTEN price/market selection, using the
+            // same registered book views arb_step saw, just to log/credit it right
+            bool sell = residual_before > 0;
+            price_t price0 = sell ? copy0_before.bid_prices[0] : copy0_before.ask_prices[0];
+            price_t price1 = sell ? copy1_before.bid_prices[0] : copy1_before.ask_prices[0];
+            qty_t   q0     = sell ? copy0_before.bid_qtys[0]   : copy0_before.ask_qtys[0];
+            qty_t   q1     = sell ? copy1_before.bid_qtys[0]   : copy1_before.ask_qtys[0];
+            bool liquid0 = q0 != 0, liquid1 = q1 != 0;
+            bool market;
+            if (liquid0 && liquid1) market = sell ? (price1 > price0) : (price1 < price0);
+            else if (liquid1)       market = true;
+            else                    market = false;
+            if (liquid0 || liquid1) {
+                qty_t res_qty = (qty_t)(sell ? residual_before : -residual_before);
+                push_owed(sell ? Ask : Bid, res_qty, market ? price1 : price0, true, i);
+            }
+        }
+
+        // settle whatever fill was IN FLIGHT from the previous iteration (the one
+        // that just actually landed in the model, per residual_before/after), not
+        // the one we're sending this iteration (that lands next iteration instead)
+        int delta = (int)m->arb.residual - (int)residual_before;
+        bool landed = in_flight_valid && delta != 0;
+        ob_side_t landed_side = Bid; qty_t landed_qty = 0; price_t landed_price = 0; int landed_cycle = i;
+        if (landed) {
+            landed_side = delta > 0 ? Bid : Ask;
+            landed_qty  = (qty_t)(delta > 0 ? delta : -delta);
+            landed_price = in_flight.price;
+            landed_cycle = in_flight.cycle;   // plot the fill at the order's placement cycle, not the fill's landing cycle
+            if (landed_side == Bid) cash -= (double)landed_price * landed_qty;   // bought
+            else                    cash += (double)landed_price * landed_qty;   // sold
+        }
+        in_flight_valid = sending_fill;
+        if (sending_fill) in_flight = OwedFill{ sent_side, sent_qty, sent_price, false, sent_cycle };
+
+        double mid0 = ((double)m->ob[0].bid_prices[0] + (double)m->ob[0].ask_prices[0]) / 2.0;
+        double mid1 = ((double)m->ob[1].bid_prices[0] + (double)m->ob[1].ask_prices[0]) / 2.0;
+        // mark the still-open leg (residual) to the current cross-market mid, so PnL
+        // doesn't swing wildly just because one leg settled before the other
+        double mtm_pnl = cash + (double)m->arb.residual * (mid0 + mid1) / 2.0;
+        if (i >= WARMUP_CYCLES)
+            fprintf(f, "%d,%.2f,%.2f,%d,%u,%u,%d,%.2f,%d,%d,%d,%d\n", i, mid0, mid1,
+                    landed ? (int)landed_side : -1, landed ? landed_qty : 0,
+                    landed ? landed_price : 0,
+                    (int)m->arb.residual, mtm_pnl, (int)m->arb.error, (int)m->arb.pending, (int)m->arb.state,
+                    landed ? landed_cycle : -1);
+    }
+    fclose(f);
+    printf("scenario final cash=%.2f residual=%d\n", cash, (int)m->arb.residual);
 }
 
 int main(int argc, char** argv) {
@@ -378,6 +588,12 @@ int main(int argc, char** argv) {
     } else if (argc >= 6 && strcmp(argv[1], "--scenario") == 0 && strcmp(argv[2], "ema") == 0) {
         seed = (uint32_t)strtoul(argv[3], nullptr, 0); ncyc = atoi(argv[4]);
         scenario_ema(dut, &m, seed, ncyc, argv[5]);
+        printf("\n%d checks, %d failure(s)\n", g_checks, g_errors);
+        g_tfp->close(); delete g_tfp; delete dut;
+        return g_errors ? 1 : 0;
+    } else if (argc >= 6 && strcmp(argv[1], "--scenario") == 0 && strcmp(argv[2], "arb") == 0) {
+        seed = (uint32_t)strtoul(argv[3], nullptr, 0); ncyc = atoi(argv[4]);
+        scenario_arb(dut, &m, seed, ncyc, argv[5]);
         printf("\n%d checks, %d failure(s)\n", g_checks, g_errors);
         g_tfp->close(); delete g_tfp; delete dut;
         return g_errors ? 1 : 0;

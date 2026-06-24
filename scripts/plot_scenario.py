@@ -27,15 +27,23 @@ def main():
     ap.add_argument("csv_path")
     ap.add_argument("--title", default=None, help="Trader name for the plot title (e.g. EMA)")
     ap.add_argument("--out", default=None, help="Save to file instead of showing interactively")
+    ap.add_argument("--two-mids", action="store_true",
+                     help="Plot mid_target and book_mid as two separate series (e.g. arb's two markets). "
+                          "Default plots only book_mid, for scenarios where mid_target is just a synthetic "
+                          "target the book tracks closely (e.g. EMA's OU process).")
     args = ap.parse_args()
 
     rows = load(args.csv_path)
     cycle = [r["cycle"] for r in rows]
+    mid_target = [r["mid_target"] for r in rows]
     book_mid = [r["book_mid"] for r in rows]
     pnl = [r["mtm_pnl"] for r in rows]
 
     fills = [r for r in rows if r["fill_side"] != -1]
-    fill_cycle = [r["cycle"] for r in fills]
+    # anchor each fill marker to the cycle its order was QUOTED at (fill_cycle),
+    # not the cycle the fill happened to land at -- by fill time, latency means
+    # the live mid has usually moved on, so the marker would float off the line
+    fill_cycle = [r.get("fill_cycle", r["cycle"]) for r in fills]
     fill_price = [r["fill_price"] for r in fills]
     fill_color = ["tab:green" if r["fill_side"] == 0 else "tab:red" for r in fills]  # Bid=buy, Ask=sell
 
@@ -43,7 +51,11 @@ def main():
     title = args.title or args.csv_path
     fig, (ax_price, ax_pnl) = plt.subplots(2, 1, sharex=True, figsize=(6, 4.2))
 
-    ax_price.plot(cycle, book_mid, color="0.5", linewidth=0.8)
+    if args.two_mids:
+        ax_price.plot(cycle, mid_target, color="tab:blue", linewidth=1.1, linestyle="-")
+        ax_price.plot(cycle, book_mid, color="tab:orange", linewidth=1.1, linestyle="--")
+    else:
+        ax_price.plot(cycle, book_mid, color="tab:blue", linewidth=0.8)
     ax_price.scatter(fill_cycle, fill_price, c=fill_color, s=6, linewidths=0, zorder=3)
     ax_price.set_ylabel("price")
     ax_price.set_title(title, fontsize=11)

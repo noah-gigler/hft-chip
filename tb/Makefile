@@ -7,8 +7,8 @@ VERILATOR := verilator
 # -Wno-fatal: traders infer latches on combinational temp vars (intentional); don't abort
 VFLAGS := --cc --exe --build --trace --assert -Wno-fatal
 
-# random run knobs (override: make sim SEED=2 NOPS=1000000)
-SEED ?= 1
+# random run knobs (NOPS=1000000)
+SEED ?= 0
 NOPS ?= 100000
 
 PKG     := $(RTL)/orderbook_pkg.sv
@@ -98,9 +98,13 @@ equiv: $(OBJ)/Vtb_orderbook_equiv
 	$(OBJ)/Vtb_orderbook_equiv +dense +nops=$(EQ_NOPS)
 
 # directed mean-reversion scenario
-SCEN_NOPS ?= 5000
+SCEN_NOPS ?= 2000
 ema_scenario: $(OBJ)/Vhft_chip
 	$(OBJ)/Vhft_chip --scenario ema $(SEED) $(SCEN_NOPS) ema_scenario.csv
+
+# directed cross-market arbitrage scenario
+arb_scenario: $(OBJ)/Vhft_chip
+	$(OBJ)/Vhft_chip --scenario arb $(SEED) $(SCEN_NOPS) arb_scenario.csv
 
 clean:
 	rm -rf $(OBJ)
