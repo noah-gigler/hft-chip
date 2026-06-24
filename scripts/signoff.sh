@@ -11,13 +11,20 @@ ROOT="/scratch/vlsi2_19fs26/hft-chip"
 cd "$ROOT"
 
 # --- oseda part: synth, backend, GDS, DRC ---
-oseda bash <<'OSEDA'
+# NB: oseda/apptainer often exits non-zero on a harmless "Cleanup error", so we
+# must NOT let that abort the script (it skips LVS+snapshot). Tolerate it here and
+# instead guard on real output freshness below.
+oseda bash <<'OSEDA' || echo "[signoff] oseda exited non-zero (likely apptainer cleanup); continuing"
 set -e
 cd yosys    && ./run_synthesis.sh --synth      > /dev/null 2>&1
 cd ../openroad && ./run_backend.sh --all       > /dev/null 2>&1
 cd ../klayout  && ./def2gds-hft                 > /dev/null 2>&1
                   ./run_drc-hft                 > drc_run.log 2>&1
 OSEDA
+
+# guard: backend+GDS must be newer than the netlist, else the oseda part really failed
+{ [ openroad/out/hft.def -nt yosys/out/hft_yosys.v ] && [ klayout/out/hft.gds -nt yosys/out/hft_yosys.v ]; } \
+  || { echo "[signoff] ERROR: backend/GDS missing or stale; aborting before snapshot"; exit 1; }
 
 DRC=$(cat "$ROOT"/klayout/drc/out/*.lyrdb | grep -c '<item>' || true)
 

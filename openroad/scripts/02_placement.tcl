@@ -68,7 +68,7 @@ set_thread_count 8
 
 # Cell padding: leave a site of whitespace on each side so the router has room
 # for legal Metal1 pin-access vias (clears Metal1 pin-access spacing slivers)
-set_placement_padding -global -left 2 -right 2
+set_placement_padding -global -left 3 -right 3
 
 # global_placement parameters:
 # density:            In every part of the chip, about N% of the area is occupied by standard cells
@@ -79,7 +79,7 @@ set_placement_padding -global -left 2 -right 2
 
 # Rough placement to get parasitics from steiner-tree estimate so we can run repair_timing
 utl::report "Global Placement (1)"
-global_placement -density 0.25
+global_placement -density 0.20
 report_metrics "02-02_${proj_name}.gpl1"
 report_image "02-02_${proj_name}.gpl1" true true
 save_checkpoint 02-02_${proj_name}.gpl1
@@ -92,7 +92,7 @@ save_checkpoint 02-02_${proj_name}.gpl1_fix
 
 # WARNING: repair_timing after timing-driven placement to avoid dbModITerm null bug
 utl::report "Global Placement (2)"
-global_placement -density 0.25 \
+global_placement -density 0.20 \
                  -routability_driven \
                  -routability_check_overflow 0.30 \
                  -timing_driven
