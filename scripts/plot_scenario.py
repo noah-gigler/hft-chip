@@ -62,7 +62,7 @@ def main():
 
     if args.two_mids:
         ax_price.plot(cycle, mid_target, color="tab:blue", linewidth=1.1, linestyle="-")
-        ax_price.plot(cycle, book_mid, color="tab:orange", linewidth=1.1, linestyle="--")
+        ax_price.plot(cycle, book_mid, color="tab:orange", linewidth=1.1, linestyle="-")
     else:
         ax_price.plot(cycle, book_mid, color="tab:blue", linewidth=0.8)
     ax_price.scatter(fill_cycle, fill_price, c=fill_color, s=6, linewidths=0, zorder=3)
