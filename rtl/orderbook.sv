@@ -64,14 +64,17 @@ module orderbook
         end
     end
 
+    // index of the lowest set bit (0 if none). Flat form: isolate the lowest set
+    // bit (array & -array) then one-hot encode via an OR-reduction tree. Same
+    // result as a sequential scan but log-depth instead of an N-deep mux chain.
     function automatic logic [$clog2(N)-1:0] first(
         input logic [N-1:0] array
     );
-        first = 0;
-        for (int i = N-1; i >= 0; i--) begin
-            if (array[i])
-                first = i[$clog2(N)-1:0];
-        end
+        logic [N-1:0] lsb;
+        lsb = array & (-array);
+        first = '0;
+        for (int i = 0; i < N; i++)
+            if (lsb[i]) first |= i[$clog2(N)-1:0];
     endfunction
 
     always_comb begin
