@@ -88,7 +88,7 @@ module orderbook
         logic[$clog2(N)-1:0] eq_idx;
         logic[$clog2(N)-1:0] cmp_idx;
         logic pre_error;
-        logic onehot;
+        logic onehot0;
         logic signed [QTY_WIDTH+1:0] sum_delta; // change in active-side total qty
 
         bid_prices_d = bid_prices_q;
@@ -109,7 +109,7 @@ module orderbook
         any_eq     = 1'b0;
         eq_idx     = '0;
         cmp_idx    = '0;
-        onehot     = 1'b0;
+        onehot0     = 1'b0;
         pre_error  = 1'b0;
 
         error_d = error_q;
@@ -125,8 +125,8 @@ module orderbook
             eq_idx = first(equals);
 
 
-            onehot = (equals & (equals - 1)) == 0;
-            pre_error = (qty_i == 0) || (any_eq && !onehot);
+            onehot0 = (equals & (equals - 1)) == 0;
+            pre_error = (qty_i == 0) || (any_eq && !onehot0);
 
             if (pre_error) begin
                 error_d = 1'b1;
