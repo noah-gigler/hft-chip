@@ -97,5 +97,10 @@ equiv: $(OBJ)/Vtb_orderbook_equiv
 	$(OBJ)/Vtb_orderbook_equiv +nops=$(EQ_NOPS)
 	$(OBJ)/Vtb_orderbook_equiv +dense +nops=$(EQ_NOPS)
 
+# directed mean-reversion scenario
+SCEN_NOPS ?= 5000
+ema_scenario: $(OBJ)/Vhft_chip
+	$(OBJ)/Vhft_chip --scenario ema $(SEED) $(SCEN_NOPS) ema_scenario.csv
+
 clean:
 	rm -rf $(OBJ)

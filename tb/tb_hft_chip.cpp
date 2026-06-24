@@ -247,6 +247,120 @@ static int run_random(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc) {
     return 0;
 }
 
+// directed scenario: ema mean-reversion 
+// Drives market 3's real orderbook toward an Ornstein-Uhlenbeck mid-price
+static void scenario_ema(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, const char* csv_path) {
+    printf("=== scenario: ema seed=%u ncyc=%d -> %s ===\n", seed, ncyc, csv_path);
+    std::mt19937 rng(seed);
+    std::normal_distribution<double> noise(0.0, 1.0);
+    auto rnd = [&](int lo, int hi) { return (int)(rng() % (hi - lo + 1)) + lo; };
+    reset(dut, m);
+
+    FILE* f = fopen(csv_path, "w");
+    fprintf(f, "cycle,mid_target,book_mid,fill_side,fill_qty,fill_price,position,mtm_pnl,error,pending,state\n");
+
+    const double mu    = (double)PRICE_MAX / 2.0;
+    const double theta = 0.1;
+    const double sigma = 6.0;
+    const int    spread = 2;
+    const int    qty    = 40;
+    double mid_target = mu;
+    double cash = 0.0;
+
+    // FSM always inserts the new quote BEFORE removing the old one, so a
+    // best bid/ask is present every cycle (no all-zero "both_liquid" gap).
+    // Track our own resting quotes explicitly rather than reading the sorted
+    // book, since new/old levels can land at either index once both exist.
+    enum QuotePhase { PH_INSERT_BID, PH_REMOVE_BID, PH_INSERT_ASK, PH_REMOVE_ASK };
+    int phase = PH_INSERT_BID;
+    price_t bid_price = 0, ask_price = 0, old_bid_price = 0, old_ask_price = 0;
+    qty_t   bid_qty = 0,   ask_qty = 0,   old_bid_qty = 0,   old_ask_qty = 0;
+    int fill_cooldown = 0;
+
+    for (int i = 0; i < ncyc; i++) {
+        if (i % 8 == 0) {
+            mid_target += theta * (mu - mid_target) + sigma * noise(rng);
+            if (mid_target < spread + 2) mid_target = spread + 2;
+            if (mid_target > (double)PRICE_MAX - spread - 2) mid_target = PRICE_MAX - spread - 2;
+        }
+
+        InMsg in{ false, 0, 0, Insert, Bid, 0, 0 };
+        // `pending` reflects state from up to 2 cycles ago (registered input +
+        // registered fill latency), so firing a fill on every "pending>0" read
+        // can queue two fills back-to-back and hit a spurious (sticky) error
+        // once the first one actually lands. Cool down after each fill.
+        if (fill_cooldown > 0) fill_cooldown--;
+        bool want_fill = fill_cooldown == 0 && m->ema.pending > 0 && rnd(0, 4) < 4;
+        if (want_fill) {
+            qty_t cap = m->ema.order_qty > 0 ? m->ema.order_qty : 1;   // bound to the actual resting order
+            qty_t fqty = (qty_t)rnd(1, cap);
+            ob_side_t fside = m->ema.order_side;   // fill must match the resting order's side
+            in = InMsg{ true, MSG_PRIVATE, 3, Insert, fside, 0, fqty };
+            fill_cooldown = 3;
+        } else {
+            switch (phase) {
+            case PH_INSERT_BID: {
+                double bp = mid_target - spread / 2.0;
+                if (bp < 1) bp = 1; if (bp > PRICE_MAX - 1) bp = PRICE_MAX - 1;
+                old_bid_price = bid_price; old_bid_qty = bid_qty;   // prior quote, removed next step
+                bid_price = (price_t)bp; bid_qty = (qty_t)qty;
+                in = InMsg{ true, MSG_PUBLIC, 3, Insert, Bid, bid_price, bid_qty };
+                phase = PH_REMOVE_BID;
+                break;
+            }
+            case PH_REMOVE_BID:
+                if (old_bid_qty > 0)
+                    in = InMsg{ true, MSG_PUBLIC, 3, Remove, Bid, old_bid_price, old_bid_qty };
+                old_bid_qty = 0;
+                phase = PH_INSERT_ASK;
+                break;
+            case PH_INSERT_ASK: {
+                double ap = mid_target + spread / 2.0;
+                if (ap < 1) ap = 1; if (ap > PRICE_MAX - 1) ap = PRICE_MAX - 1;
+                old_ask_price = ask_price; old_ask_qty = ask_qty;
+                ask_price = (price_t)ap; ask_qty = (qty_t)qty;
+                in = InMsg{ true, MSG_PUBLIC, 3, Insert, Ask, ask_price, ask_qty };
+                phase = PH_REMOVE_ASK;
+                break;
+            }
+            case PH_REMOVE_ASK:
+                if (old_ask_qty > 0)
+                    in = InMsg{ true, MSG_PUBLIC, 3, Remove, Ask, old_ask_price, old_ask_qty };
+                old_ask_qty = 0;
+                phase = PH_INSERT_BID;
+                break;
+            }
+        }
+
+        int16_t pos_before = m->ema.position;
+        price_t order_price_before = m->ema.order_price;
+
+        char label[40]; snprintf(label, sizeof label, "ema_scn#%d", i);
+        if (!cycle(dut, m, in, label)) {
+            printf("  (mismatch at cycle %d)\n", i);
+            fclose(f);
+            return;
+        }
+
+        int delta = (int)m->ema.position - (int)pos_before;
+        bool filled = delta != 0;
+        ob_side_t fside = Bid; qty_t fqty = 0; price_t fprice = 0;
+        if (filled) {
+            if (delta > 0) { fside = Bid; fqty = (qty_t)delta;  cash -= (double)order_price_before * fqty; }
+            else           { fside = Ask; fqty = (qty_t)(-delta); cash += (double)order_price_before * fqty; }
+            fprice = order_price_before;
+        }
+
+        double book_mid = ((double)m->ob[3].bid_prices[0] + (double)m->ob[3].ask_prices[0]) / 2.0;
+        double mtm_pnl = cash + (double)m->ema.position * book_mid;   // mark the open position to the current mid
+        fprintf(f, "%d,%.2f,%.2f,%d,%u,%u,%d,%.2f,%d,%d,%d\n", i, mid_target, book_mid,
+                filled ? (int)fside : -1, filled ? fqty : 0, filled ? fprice : 0,
+                (int)m->ema.position, mtm_pnl, (int)m->ema.error, (int)m->ema.pending, (int)m->ema.state);
+    }
+    fclose(f);
+    printf("scenario final cash=%.2f position=%d\n", cash, (int)m->ema.position);
+}
+
 int main(int argc, char** argv) {
     Verilated::commandArgs(argc, argv);
     Verilated::traceEverOn(true);
@@ -261,6 +375,12 @@ int main(int argc, char** argv) {
     uint32_t seed = 1; int ncyc = 100000;
     if (argc >= 4 && strcmp(argv[1], "--random") == 0) {
         seed = (uint32_t)strtoul(argv[2], nullptr, 0); ncyc = atoi(argv[3]);
+    } else if (argc >= 6 && strcmp(argv[1], "--scenario") == 0 && strcmp(argv[2], "ema") == 0) {
+        seed = (uint32_t)strtoul(argv[3], nullptr, 0); ncyc = atoi(argv[4]);
+        scenario_ema(dut, &m, seed, ncyc, argv[5]);
+        printf("\n%d checks, %d failure(s)\n", g_checks, g_errors);
+        g_tfp->close(); delete g_tfp; delete dut;
+        return g_errors ? 1 : 0;
     }
 
     int rc = run_random(dut, &m, seed, ncyc);

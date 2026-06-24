@@ -82,3 +82,6 @@
 #yosys
 /yosys/out
 /artifacts
+# report
+/report/results/*.csv
+/report/figures/*.png
