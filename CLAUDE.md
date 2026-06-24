@@ -10,6 +10,7 @@ VLSI2 course project at ETH Zurich (227-0147-00 L). Team: Luis Wirth, Noah Gigle
 - Tooling is behind `oseda` (SEPP/Apptainer container): Verilator 5.046, Bender 0.31.0, Yosys 0.64, OpenROAD, KLayout
 - git runs **outside** oseda. Gotcha: `oseda bash -c '...'` does NOT work — pipe a script instead:
   `ssh vlsi2-remote "cd <repo> && oseda bash" <<<'verilator ...'`
+- **Always run long flows in a named tmux session** on the remote so they survive ssh/Mac/Claude disconnection. Pattern: `ssh vlsi2-remote "tmux new -d -s <name> 'cd <repo> && oseda bash <<<\"...\"'"`; reattach with `tmux attach -t <name>`, check liveness with `tmux ls`.
 
 **Driver: `scripts/remote.sh`**
 - `sync` — rsync `rtl/ tb/ sw/ openroad/scripts openroad/src` with `--checksum`, no `--delete`, excludes `*.log`/`obj_dir`
