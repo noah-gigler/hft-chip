@@ -106,5 +106,9 @@ ema_scenario: $(OBJ)/Vhft_chip
 arb_scenario: $(OBJ)/Vhft_chip
 	$(OBJ)/Vhft_chip --scenario arb $(SEED) $(SCEN_NOPS) arb_scenario.csv
 
+# directed order-flow-imbalance-leads-price momentum scenario
+momentum_scenario: $(OBJ)/Vhft_chip
+	$(OBJ)/Vhft_chip --scenario momentum $(SEED) $(SCEN_NOPS) momentum_scenario.csv
+
 clean:
 	rm -rf $(OBJ)

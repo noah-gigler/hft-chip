@@ -31,6 +31,10 @@ def main():
                      help="Plot mid_target and book_mid as two separate series (e.g. arb's two markets). "
                           "Default plots only book_mid, for scenarios where mid_target is just a synthetic "
                           "target the book tracks closely (e.g. EMA's OU process).")
+    ap.add_argument("--imbalance", action="store_true",
+                     help="Add a third panel plotting bid_qty (positive) and ask_qty (negative, mirrored) "
+                          "from the CSV's bid_qty/ask_qty columns -- the resting-quantity imbalance signal "
+                          "momentum_trader reacts to, shown leading the price panel above it.")
     args = ap.parse_args()
 
     rows = load(args.csv_path)
@@ -49,7 +53,12 @@ def main():
 
     plt.style.use("seaborn-v0_8-whitegrid")
     title = args.title or args.csv_path
-    fig, (ax_price, ax_pnl) = plt.subplots(2, 1, sharex=True, figsize=(6, 4.2))
+    nrows = 3 if args.imbalance else 2
+    fig, axes = plt.subplots(nrows, 1, sharex=True, figsize=(6, 4.2 if nrows == 2 else 5.4))
+    if args.imbalance:
+        ax_imb, ax_price, ax_pnl = axes
+    else:
+        ax_price, ax_pnl = axes
 
     if args.two_mids:
         ax_price.plot(cycle, mid_target, color="tab:blue", linewidth=1.1, linestyle="-")
@@ -58,14 +67,34 @@ def main():
         ax_price.plot(cycle, book_mid, color="tab:blue", linewidth=0.8)
     ax_price.scatter(fill_cycle, fill_price, c=fill_color, s=6, linewidths=0, zorder=3)
     ax_price.set_ylabel("price")
-    ax_price.set_title(title, fontsize=11)
+
+    if args.imbalance:
+        imbalance = [r["bid_qty"] - r["ask_qty"] for r in rows]
+        # raw per-cycle imbalance is high-frequency noise (it's driven by a fast
+        # mean-reverting OU process); the slow trend that actually correlates with
+        # price lives in its rolling average, which is what the trader's cumulative
+        # impact on price tracks -- plot that instead of the noisy raw signal
+        window = 50
+        smoothed = []
+        acc = 0.0
+        for idx, v in enumerate(imbalance):
+            acc += v
+            if idx >= window:
+                acc -= imbalance[idx - window]
+            smoothed.append(acc / min(idx + 1, window))
+        ax_imb.plot(cycle, smoothed, color="tab:purple", linewidth=1.1)
+        ax_imb.axhline(0, color="0.7", linewidth=0.6)
+        ax_imb.set_ylabel(f"imbalance\n({window}-cyc avg)")
+        ax_imb.set_title(title, fontsize=11)
+    else:
+        ax_price.set_title(title, fontsize=11)
 
     ax_pnl.plot(cycle, pnl, color="tab:green", linewidth=1.2)
     ax_pnl.axhline(0, color="0.7", linewidth=0.6)
     ax_pnl.set_ylabel("PnL")
     ax_pnl.set_xlabel("cycle")
 
-    for ax in (ax_price, ax_pnl):
+    for ax in axes:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
