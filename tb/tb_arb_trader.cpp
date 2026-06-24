@@ -13,7 +13,7 @@
 
 static const int ARB_THRESHOLD = 2;   // matches rtl/arb_trader.sv default
 
-static int g_errors = 0, g_checks = 0;
+static int g_errors = 0, g_checks = 0, g_emits = 0;
 static VerilatedVcdC* g_tfp = nullptr;
 static vluint64_t g_time = 0;
 
@@ -33,6 +33,7 @@ static void drive_books(Varb_trader* dut, const book_t* b0, const book_t* b1) {
 
 static bool compare(Varb_trader* dut, const trade_out_t& e, const char* label) {
     g_checks++;
+    if (e.valid) g_emits++;
     bool ok = ((bool)dut->valid_o == e.valid) && ((bool)dut->error_o == e.error);
     // output payload only meaningful when a trade is emitted
     if (e.valid) {
@@ -163,7 +164,7 @@ int main(int argc, char** argv) {
     directed_error(dut, &m);
     rc += run_random(dut, &m, seed, ncyc);
 
-    printf("\n%d checks, %d failure(s)\n", g_checks, g_errors);
+    printf("\n%d checks, %d failure(s), %d emits\n", g_checks, g_errors, g_emits);
     g_tfp->close(); delete g_tfp; delete dut;
     return (g_errors || rc) ? 1 : 0;
 }

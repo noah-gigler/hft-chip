@@ -22,10 +22,12 @@ MODELS  := $(SW)/orderbook.c $(SW)/arb_trader.c \
 all: orderbook arb momentum ema chip
 
 # ---------------- orderbook ----------------
-$(OBJ)/Vorderbook: $(RTL)/orderbook.sv tb_orderbook.cpp $(SW)/orderbook.c $(SW)/orderbook.h $(PKG)
+# unit test checks full book state, so it targets orderbook_sorted directly
+# (--prefix keeps the Vorderbook class name the cpp expects)
+$(OBJ)/Vorderbook: $(RTL)/orderbook_sorted.sv tb_orderbook.cpp $(SW)/orderbook.c $(SW)/orderbook.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module orderbook -GN=32 -CFLAGS "-I$(SW)" \
-		$(PKG) $(RTL)/orderbook.sv tb_orderbook.cpp $(SW)/orderbook.c
+		--top-module orderbook_sorted --prefix Vorderbook -GN=32 -CFLAGS "-I$(SW)" \
+		$(PKG) $(RTL)/orderbook_sorted.sv tb_orderbook.cpp $(SW)/orderbook.c
 
 orderbook: sim
 sim: vectors random
@@ -63,11 +65,17 @@ ema: $(OBJ)/Vema_trader
 	$(OBJ)/Vema_trader --random $(SEED) $(NOPS)
 
 # ---------------- whole chip ----------------
-$(OBJ)/Vhft_chip: $(RTL)/hft_chip.sv $(RTL)/hft_core.sv $(TRADERS) $(RTL)/orderbook.sv pad_stubs.sv \
+# OB_UNSORTED selects the orderbook impl (0=sorted, 1=unsorted). The chip TB
+# stimulus already avoids sentinel prices, so the single golden model is valid
+# for both. Flip the impl with: make clean chip OB_UNSORTED=1
+OB_UNSORTED ?= 0
+OB_RTL := $(RTL)/orderbook_sorted.sv $(RTL)/orderbook_unsorted.sv $(RTL)/orderbook.sv
+
+$(OBJ)/Vhft_chip: $(RTL)/hft_chip.sv $(RTL)/hft_core.sv $(TRADERS) $(OB_RTL) pad_stubs.sv \
                    tb_hft_chip.cpp $(MODELS) $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module hft_chip -CFLAGS "-I$(SW)" \
-		$(PKG) $(RTL)/orderbook.sv $(TRADERS) $(RTL)/hft_core.sv $(RTL)/hft_chip.sv pad_stubs.sv \
+		--top-module hft_chip -GOB_UNSORTED=$(OB_UNSORTED) -CFLAGS "-I$(SW)" \
+		$(PKG) $(OB_RTL) $(TRADERS) $(RTL)/hft_core.sv $(RTL)/hft_chip.sv pad_stubs.sv \
 		tb_hft_chip.cpp $(MODELS)
 
 chip: $(OBJ)/Vhft_chip

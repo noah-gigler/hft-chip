@@ -1,4 +1,6 @@
-module hft_chip import orderbook_pkg::*; #() (
+module hft_chip import orderbook_pkg::*; #(
+  parameter bit OB_UNSORTED = 1'b0
+) (
   input  wire clk_i,
   input  wire rst_ni,
 
@@ -162,7 +164,7 @@ module hft_chip import orderbook_pkg::*; #() (
     end
   end
 
-  hft_core #(.N(N)) core_i (
+  hft_core #(.N(N), .OB_UNSORTED(OB_UNSORTED)) core_i (
     .clk_i   (clk),
     .rst_ni  (rst_n),
 

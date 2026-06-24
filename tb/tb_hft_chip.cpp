@@ -176,9 +176,15 @@ static bool cycle(Vhft_chip* dut, ChipModel* m, const InMsg& in, const char* lab
 static InMsg gen_public(ChipModel* m, uint8_t mk, std::mt19937& rng) {
     auto rnd = [&](int lo, int hi) { return (int)(rng() % (hi - lo + 1)) + lo; };
     InMsg in{ true, MSG_PUBLIC, mk, Insert, rnd(0,1) ? Ask : Bid, 0, 0 };
-    const orderbook_t* o = &m->ob[mk];
-    const price_t* p = in.side == Bid ? o->bid_prices : o->ask_prices;
-    const qty_t*   q = in.side == Bid ? o->bid_qtys   : o->ask_qtys;
+    // The chip registers inputs at the pad boundary, so this op lands one cycle
+    // later, after the in-flight input (m->in_q) has already updated the book.
+    // Validate against that post-update state so we never emit a stale-illegal op.
+    orderbook_t scratch = m->ob[mk];
+    const InMsg& fl = m->in_q;
+    if (fl.valid && fl.msg_type == MSG_PUBLIC && fl.market == mk)
+        orderbook_update(&scratch, fl.op, fl.side, fl.price, fl.qty);
+    const price_t* p = in.side == Bid ? scratch.bid_prices : scratch.ask_prices;
+    const qty_t*   q = in.side == Bid ? scratch.bid_qtys   : scratch.ask_qtys;
     int occ[N], nocc = 0;
     for (int i = 0; i < N; i++) if (q[i]) occ[nocc++] = i;
 

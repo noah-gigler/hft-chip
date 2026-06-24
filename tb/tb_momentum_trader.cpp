@@ -11,7 +11,7 @@
 // momentum_trader unit TB. The DUT consumes top-of-book + the orderbook's
 // running qty sums; compare every cycle against the cycle-accurate golden model.
 
-static int g_errors = 0, g_checks = 0;
+static int g_errors = 0, g_checks = 0, g_emits = 0;
 static VerilatedVcdC* g_tfp = nullptr;
 static vluint64_t g_time = 0;
 static void dump() { if (g_tfp) g_tfp->dump(g_time); g_time++; }
@@ -31,6 +31,7 @@ static void drive_book(Vmomentum_trader* dut, const book_t* b) {
 
 static bool compare(Vmomentum_trader* dut, const trade_out_t& e, const char* label) {
     g_checks++;
+    if (e.valid) g_emits++;
     bool ok = ((bool)dut->valid_o == e.valid) && ((bool)dut->error_o == e.error);
     if (e.valid)
         ok = ok && ((int)dut->side_o == (int)e.side)
@@ -136,7 +137,7 @@ int main(int argc, char** argv) {
     anchor_checks();
     int rc = run_random(dut, &m, seed, ncyc);
 
-    printf("\n%d checks, %d failure(s)\n", g_checks, g_errors);
+    printf("\n%d checks, %d failure(s), %d emits\n", g_checks, g_errors, g_emits);
     g_tfp->close(); delete g_tfp; delete dut;
     return (g_errors || rc) ? 1 : 0;
 }

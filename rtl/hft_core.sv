@@ -1,5 +1,6 @@
 module hft_core import orderbook_pkg::*; #(
-    parameter int N
+    parameter int N,
+    parameter bit OB_UNSORTED = 1'b0
 )(
     input  logic                   clk_i,
     input  logic                   rst_ni,
@@ -22,8 +23,8 @@ module hft_core import orderbook_pkg::*; #(
 
   localparam int SUM_WIDTH = $clog2(N)+QTY_WIDTH;
 
-  price_t [3:0][N-1:0] bid_prices, ask_prices;
-  qty_t   [3:0][N-1:0] bid_qtys,  ask_qtys;
+  price_t [3:0] bid_best_price, ask_best_price;
+  qty_t   [3:0] bid_best_qty,   ask_best_qty;
 
   price_t [3:0] bid_price0_q, ask_price0_q;
   qty_t   [3:0] bid_qty0_q,   ask_qty0_q;
@@ -41,10 +42,10 @@ module hft_core import orderbook_pkg::*; #(
       ask_qty_sum2_q <= '0;
     end else begin
       for (int i = 0; i < 4; i++) begin
-        bid_price0_q[i] <= bid_prices[i][0];
-        ask_price0_q[i] <= ask_prices[i][0];
-        bid_qty0_q[i]   <= bid_qtys[i][0];
-        ask_qty0_q[i]   <= ask_qtys[i][0];
+        bid_price0_q[i] <= bid_best_price[i];
+        ask_price0_q[i] <= ask_best_price[i];
+        bid_qty0_q[i]   <= bid_best_qty[i];
+        ask_qty0_q[i]   <= ask_best_qty[i];
       end
       bid_qty_sum2_q <= bid_qty_sum2;
       ask_qty_sum2_q <= ask_qty_sum2;
@@ -83,7 +84,7 @@ module hft_core import orderbook_pkg::*; #(
   assign qty_o    = valid_arb ? qty_arb   : valid_mom ? qty_mom   : qty_ema;
   assign error_o  = |error_ob | |error_trader;
 
-  orderbook #(.N(N)) orderbook0_i (
+  orderbook #(.N(N), .UNSORTED(OB_UNSORTED)) orderbook0_i (
     .clk_i        (clk_i),
     .rst_ni       (rst_ni),
 
@@ -93,15 +94,17 @@ module hft_core import orderbook_pkg::*; #(
     .price_i      (price_i),
     .qty_i        (qty_i),
 
-    .bid_prices_o (bid_prices[0]),
-    .bid_qtys_o   (bid_qtys[0]),
-    .ask_prices_o (ask_prices[0]),
-    .ask_qtys_o   (ask_qtys[0]),
+    .best_bid_price_o (bid_best_price[0]),
+    .best_bid_qty_o   (bid_best_qty[0]),
+    .best_ask_price_o (ask_best_price[0]),
+    .best_ask_qty_o   (ask_best_qty[0]),
+    .bid_qty_sum_o    (),
+    .ask_qty_sum_o    (),
 
     .error_o      (error_ob[0])
   );
 
-  orderbook #(.N(N)) orderbook1_i (
+  orderbook #(.N(N), .UNSORTED(OB_UNSORTED)) orderbook1_i (
     .clk_i        (clk_i),
     .rst_ni       (rst_ni),
 
@@ -111,15 +114,17 @@ module hft_core import orderbook_pkg::*; #(
     .price_i      (price_i),
     .qty_i        (qty_i),
 
-    .bid_prices_o (bid_prices[1]),
-    .bid_qtys_o   (bid_qtys[1]),
-    .ask_prices_o (ask_prices[1]),
-    .ask_qtys_o   (ask_qtys[1]),
+    .best_bid_price_o (bid_best_price[1]),
+    .best_bid_qty_o   (bid_best_qty[1]),
+    .best_ask_price_o (ask_best_price[1]),
+    .best_ask_qty_o   (ask_best_qty[1]),
+    .bid_qty_sum_o    (),
+    .ask_qty_sum_o    (),
 
     .error_o      (error_ob[1])
   );
 
-  orderbook #(.N(N)) orderbook2_i (
+  orderbook #(.N(N), .UNSORTED(OB_UNSORTED)) orderbook2_i (
     .clk_i        (clk_i),
     .rst_ni       (rst_ni),
 
@@ -129,17 +134,17 @@ module hft_core import orderbook_pkg::*; #(
     .price_i      (price_i),
     .qty_i        (qty_i),
 
-    .bid_prices_o (bid_prices[2]),
-    .bid_qtys_o   (bid_qtys[2]),
-    .ask_prices_o (ask_prices[2]),
-    .ask_qtys_o   (ask_qtys[2]),
-    .bid_qty_sum_o (bid_qty_sum2),
-    .ask_qty_sum_o (ask_qty_sum2),
+    .best_bid_price_o (bid_best_price[2]),
+    .best_bid_qty_o   (bid_best_qty[2]),
+    .best_ask_price_o (ask_best_price[2]),
+    .best_ask_qty_o   (ask_best_qty[2]),
+    .bid_qty_sum_o    (bid_qty_sum2),
+    .ask_qty_sum_o    (ask_qty_sum2),
 
     .error_o      (error_ob[2])
   );
 
-  orderbook #(.N(N)) orderbook3_i (
+  orderbook #(.N(N), .UNSORTED(OB_UNSORTED)) orderbook3_i (
     .clk_i        (clk_i),
     .rst_ni       (rst_ni),
 
@@ -149,10 +154,12 @@ module hft_core import orderbook_pkg::*; #(
     .price_i      (price_i),
     .qty_i        (qty_i),
 
-    .bid_prices_o (bid_prices[3]),
-    .bid_qtys_o   (bid_qtys[3]),
-    .ask_prices_o (ask_prices[3]),
-    .ask_qtys_o   (ask_qtys[3]),
+    .best_bid_price_o (bid_best_price[3]),
+    .best_bid_qty_o   (bid_best_qty[3]),
+    .best_ask_price_o (ask_best_price[3]),
+    .best_ask_qty_o   (ask_best_qty[3]),
+    .bid_qty_sum_o    (),
+    .ask_qty_sum_o    (),
 
     .error_o      (error_ob[3])
   );
