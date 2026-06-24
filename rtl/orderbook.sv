@@ -7,7 +7,7 @@ module orderbook
     import orderbook_pkg::*;
 #(
     parameter int N,
-    parameter bit UNSORTED = 1'b0
+    parameter bit UNSORTED = 1'b1
 )(
     input logic clk_i,
     input logic rst_ni,

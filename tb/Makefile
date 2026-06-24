@@ -17,7 +17,7 @@ TRADERS := $(RTL)/arb_trader.sv $(RTL)/momentum_trader.sv $(RTL)/ema_trader.sv
 MODELS  := $(SW)/orderbook.c $(SW)/arb_trader.c \
            $(SW)/momentum_trader.c $(SW)/ema_trader.c
 
-.PHONY: all sim orderbook arb momentum ema chip vectors random clean
+.PHONY: all sim orderbook arb momentum ema chip equiv vectors random clean
 
 all: orderbook arb momentum ema chip
 
@@ -65,10 +65,10 @@ ema: $(OBJ)/Vema_trader
 	$(OBJ)/Vema_trader --random $(SEED) $(NOPS)
 
 # ---------------- whole chip ----------------
-# OB_UNSORTED selects the orderbook impl (0=sorted, 1=unsorted). The chip TB
-# stimulus already avoids sentinel prices, so the single golden model is valid
-# for both. Flip the impl with: make clean chip OB_UNSORTED=1
-OB_UNSORTED ?= 0
+# OB_UNSORTED selects the orderbook impl (0=sorted, 1=unsorted). Defaults to the
+# taped-out config (unsorted). The chip TB stimulus avoids sentinel prices, so
+# the single golden model is valid for both. Test sorted with: make clean chip OB_UNSORTED=0
+OB_UNSORTED ?= 1
 OB_RTL := $(RTL)/orderbook_sorted.sv $(RTL)/orderbook_unsorted.sv $(RTL)/orderbook.sv
 
 $(OBJ)/Vhft_chip: $(RTL)/hft_chip.sv $(RTL)/hft_core.sv $(TRADERS) $(OB_RTL) pad_stubs.sv \
@@ -80,6 +80,22 @@ $(OBJ)/Vhft_chip: $(RTL)/hft_chip.sv $(RTL)/hft_core.sv $(TRADERS) $(OB_RTL) pad
 
 chip: $(OBJ)/Vhft_chip
 	$(OBJ)/Vhft_chip --random $(SEED) $(NOPS)
+
+# -------- orderbook equivalence (sorted vs unsorted, no golden model) --------
+# Self-checking SV testbench: drives both impls through the wrapper with
+# identical random stimulus and fails on any top-of-book divergence. +dense
+# narrows the price range to 2N to stress the eviction path. No C model.
+EQ_N    ?= 64
+EQ_NOPS ?= 200000
+
+$(OBJ)/Vtb_orderbook_equiv: tb_orderbook_equiv.sv $(OB_RTL) $(PKG)
+	$(VERILATOR) --binary --assert -Mdir $(OBJ) \
+		--top-module tb_orderbook_equiv -GN=$(EQ_N) \
+		$(PKG) $(OB_RTL) tb_orderbook_equiv.sv
+
+equiv: $(OBJ)/Vtb_orderbook_equiv
+	$(OBJ)/Vtb_orderbook_equiv +nops=$(EQ_NOPS)
+	$(OBJ)/Vtb_orderbook_equiv +dense +nops=$(EQ_NOPS)
 
 clean:
 	rm -rf $(OBJ)

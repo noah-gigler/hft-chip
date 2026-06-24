@@ -69,6 +69,14 @@ Spec lists these as `croc_lvs.v`, `croc.def`, `croc.odb`, `croc.sdc`, `croc.v`, 
 - Traders consume only top-of-book (level 0); momentum also uses a running qty sum maintained incrementally in the orderbook
 - Register stages: inputs at the pad boundary, top-of-book between orderbooks and traders, outputs before the pads (pad cells are slow)
 
+#### Orderbook implementations
+
+Two interchangeable impls behind the `orderbook` wrapper (`rtl/orderbook.sv`), selected at elaboration by `UNSORTED` (propagated from `hft_core`'s `OB_UNSORTED`, from `hft_chip`'s `OB_UNSORTED`). **Default everywhere is unsorted (`1'b1`), which is what tapes out.**
+- `orderbook_unsorted.sv` — unsorted pool, best computed combinationally. Treats the full `[0,511]` price range as valid (no sentinels). **This is the taped-out impl.**
+- `orderbook_sorted.sv` — sorted shift register, best is always level 0. Uses reserved sentinel prices (0/511) for empty levels; see `spec.md`. Select with `OB_UNSORTED=0`.
+
+Both are proven behaviorally identical at top-of-book by `tb/tb_orderbook_equiv.sv` (`make -C tb equiv`), so `hft_core` is impl-agnostic.
+
 ### Known RTL concerns
 
 - **Fill contract unenforced**: `filled_qty` (ext, up to 255) not bounded to ordered qty → `position` (signed 10-bit) can wrap; residual can exceed 8 bits (arb qty truncation).
@@ -101,10 +109,11 @@ Run: `bash scripts/remote.sh run "make -C tb <target>"`
 
 | Target | What it tests |
 |--------|---------------|
-| `orderbook` | Directed `.vec` + constrained-random |
+| `orderbook` | Directed `.vec` + constrained-random; targets `orderbook_sorted` directly |
 | `arb` / `momentum` / `ema` | Unit, cycle-accurate trader models |
-| `chip` | Full `hft_chip` via `pad_stubs.sv`; composite model = input register + 4 OBs + top-of-book pipeline + 3 traders + arbitration + output register |
+| `chip` | Full `hft_chip` via `pad_stubs.sv`; composite model = input register + 4 OBs + top-of-book pipeline + 3 traders + arbitration + output register. Defaults to unsorted (taped-out); `OB_UNSORTED=0` for sorted |
 | `all` | All of the above (~100k random cycles each) |
+| `equiv` | `orderbook_sorted` vs `orderbook_unsorted` equivalence (no C model, self-checking SV); add `EQ_N=`/`EQ_NOPS=` to tune |
 
 **Key principle**: golden models are transcribed from the RTL, so passing proves DUT == model (self-consistency), not spec-correctness. Only `anchor_checks()` are independent.
 
