@@ -26,7 +26,7 @@ all: orderbook arb momentum ema chip
 # (--prefix keeps the Vorderbook class name the cpp expects)
 $(OBJ)/Vorderbook: $(RTL)/orderbook_sorted.sv tb_orderbook.cpp $(SW)/orderbook.c $(SW)/orderbook.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module orderbook_sorted --prefix Vorderbook -GN=32 -CFLAGS "-I$(SW)" \
+		--top-module orderbook_sorted --prefix Vorderbook -GN=64 -CFLAGS "-I$(SW)" \
 		$(PKG) $(RTL)/orderbook_sorted.sv tb_orderbook.cpp $(SW)/orderbook.c
 
 orderbook: sim
@@ -49,7 +49,7 @@ arb: $(OBJ)/Varb_trader
 # ---------------- momentum_trader ----------------
 $(OBJ)/Vmomentum_trader: $(RTL)/momentum_trader.sv tb_momentum_trader.cpp $(SW)/momentum_trader.c $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module momentum_trader -GN=32 -CFLAGS "-I$(SW)" \
+		--top-module momentum_trader -GN=64 -CFLAGS "-I$(SW)" \
 		$(PKG) $(RTL)/momentum_trader.sv tb_momentum_trader.cpp $(SW)/momentum_trader.c
 
 momentum: $(OBJ)/Vmomentum_trader

@@ -2,7 +2,39 @@
 
 # --- out-of-range insert on a full book is silently dropped (no error) ---
 reset
-insert bid 32 1          # fill 32 bid levels with prices 32..1
+insert bid 64 1          # fill 64 bid levels with prices 64..1
+insert bid 63 1
+insert bid 62 1
+insert bid 61 1
+insert bid 60 1
+insert bid 59 1
+insert bid 58 1
+insert bid 57 1
+insert bid 56 1
+insert bid 55 1
+insert bid 54 1
+insert bid 53 1
+insert bid 52 1
+insert bid 51 1
+insert bid 50 1
+insert bid 49 1
+insert bid 48 1
+insert bid 47 1
+insert bid 46 1
+insert bid 45 1
+insert bid 44 1
+insert bid 43 1
+insert bid 42 1
+insert bid 41 1
+insert bid 40 1
+insert bid 39 1
+insert bid 38 1
+insert bid 37 1
+insert bid 36 1
+insert bid 35 1
+insert bid 34 1
+insert bid 33 1
+insert bid 32 1
 insert bid 31 1
 insert bid 30 1
 insert bid 29 1
@@ -33,7 +65,7 @@ insert bid 5 1
 insert bid 4 1
 insert bid 3 1
 insert bid 2 1
-insert bid 1 1           # book full: bids [32..1]
+insert bid 1 1           # book full: bids [64..1]
 insert bid 100 1         # 100 > every tracked bid -> new best, evicts worst level (1)
 insert bid 0 1           # 0 is worse than every tracked bid on a full book -> drop, no error
 
