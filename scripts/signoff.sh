@@ -46,7 +46,7 @@ cp openroad/logs/*.log "$D"/logs/ 2>/dev/null || true
 cp openroad/reports/*.rpt "$D"/reports/ 2>/dev/null || true
 cp klayout/drc_run.log calibre/lvs/lvs_hft_run.log calibre/lvs/v2s.log "$D"/logs/ 2>/dev/null || true
 
-UTIL=$(grep -E 'Utilization' openroad/logs/02_placement.log | tail -1 | sed 's/.*Utilization:/Utilization:/')
+UTIL=$(grep -E 'Core utilization' openroad/reports/05_hft.final.summary | sed 's/^ *//')
 {
   echo "label=n${LABEL}, commit $(git rev-parse --short HEAD)"
   echo "DRC: ${DRC} violations"
