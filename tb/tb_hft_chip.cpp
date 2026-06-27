@@ -48,6 +48,7 @@ struct ChipModel {
     ema_model_t   ema;
     InMsg         in_q;    // registered chip inputs (pad -> core boundary register)
     OutBus        out;     // registered chip output (what the pads present this cycle)
+    bool          last_arb_want, last_mom_want, last_ema_want;  // pre-arbitration valids, this cycle
 };
 
 static book_t book_of(const orderbook_t* o) {
@@ -64,6 +65,7 @@ static void model_init(ChipModel* m) {
     arb_init(&m->arb); mom_init(&m->mom); ema_init_model(&m->ema);
     m->in_q = InMsg{ false, 0, 0, Insert, Bid, 0, 0 };
     m->out = OutBus{ false, 0, Bid, 0, 0, false };
+    m->last_arb_want = m->last_mom_want = m->last_ema_want = false;
 }
 
 // advance the model one clock under input `in_new`. The chip registers its
@@ -99,6 +101,7 @@ static void model_advance(ChipModel* m, const InMsg& in_new) {
     trade_out_t oe = ema_step(&m->ema, &m->copy[3], fill_ema, in.qty, in.side, gema);
 
     if (oa.valid) g_cov_arb++; if (om.valid) g_cov_mom++; if (oe.valid) g_cov_ema++;
+    m->last_arb_want = oa.valid; m->last_mom_want = om.valid; m->last_ema_want = oe.valid;
     for (int k = 0; k < 4; k++) if (m->ob[k].error) { g_cov_oberr++; break; }
 
     // output register: fixed priority arb > mom > ema (payload don't-care when !valid)
@@ -306,6 +309,96 @@ static bool gen_drain_fill(uint8_t market, uint8_t pending, qty_t order_qty, ob_
     return true;
 }
 
+// same idea as QuoteFSM but for arb, which quotes two markets (0/1) and alternates
+// which one's FSM gets to act each turn, since only one pad message fits per cycle
+struct ArbQuoteFSM {
+    enum Phase { PH_INSERT_BID, PH_REMOVE_BID, PH_INSERT_ASK, PH_REMOVE_ASK };
+    int     phase[2]         = { PH_INSERT_BID, PH_INSERT_BID };
+    price_t bid_price[2]     = { 0, 0 }, ask_price[2]     = { 0, 0 };
+    price_t old_bid_price[2] = { 0, 0 }, old_ask_price[2] = { 0, 0 };
+    qty_t   bid_qty[2]       = { 0, 0 }, ask_qty[2]       = { 0, 0 };
+    qty_t   old_bid_qty[2]   = { 0, 0 }, old_ask_qty[2]   = { 0, 0 };
+    int turn = 0;
+};
+
+static InMsg arb_quote_step(ArbQuoteFSM& q, const double mid[2], int spread, qty_t qty) {
+    InMsg in{ false, 0, 0, Insert, Bid, 0, 0 };
+    int k = q.turn; q.turn ^= 1;
+    switch (q.phase[k]) {
+    case ArbQuoteFSM::PH_INSERT_BID: {
+        double bp = mid[k] - spread / 2.0;
+        if (bp < 1) bp = 1; if (bp > PRICE_MAX - 1) bp = PRICE_MAX - 1;
+        q.old_bid_price[k] = q.bid_price[k]; q.old_bid_qty[k] = q.bid_qty[k];
+        q.bid_price[k] = (price_t)bp; q.bid_qty[k] = qty;
+        in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Insert, Bid, q.bid_price[k], q.bid_qty[k] };
+        q.phase[k] = ArbQuoteFSM::PH_REMOVE_BID;
+        break;
+    }
+    case ArbQuoteFSM::PH_REMOVE_BID:
+        if (q.old_bid_qty[k] > 0)
+            in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Remove, Bid, q.old_bid_price[k], q.old_bid_qty[k] };
+        q.old_bid_qty[k] = 0;
+        q.phase[k] = ArbQuoteFSM::PH_INSERT_ASK;
+        break;
+    case ArbQuoteFSM::PH_INSERT_ASK: {
+        double ap = mid[k] + spread / 2.0;
+        if (ap < 1) ap = 1; if (ap > PRICE_MAX - 1) ap = PRICE_MAX - 1;
+        q.old_ask_price[k] = q.ask_price[k]; q.old_ask_qty[k] = q.ask_qty[k];
+        q.ask_price[k] = (price_t)ap; q.ask_qty[k] = qty;
+        in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Insert, Ask, q.ask_price[k], q.ask_qty[k] };
+        q.phase[k] = ArbQuoteFSM::PH_REMOVE_ASK;
+        break;
+    }
+    case ArbQuoteFSM::PH_REMOVE_ASK:
+        if (q.old_ask_qty[k] > 0)
+            in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Remove, Ask, q.old_ask_price[k], q.old_ask_qty[k] };
+        q.old_ask_qty[k] = 0;
+        q.phase[k] = ArbQuoteFSM::PH_INSERT_BID;
+        break;
+    }
+    return in;
+}
+
+// FIFO of legs arb still needs filled (max 2 outstanding: it never re-enters a
+// leg-emitting state while one is already pending). `cycle` is the order's
+// placement cycle, kept so a CSV plot can anchor the fill where it was quoted.
+struct ArbOwedQueue {
+    struct Fill { ob_side_t side; qty_t qty; price_t price; bool full_only; int cycle; };
+    Fill q[2]; int head = 0, count = 0;
+    void push(ob_side_t side, qty_t qty, price_t price, bool full_only, int placed_cycle) {
+        if (count >= 2) return;
+        q[(head + count) % 2] = Fill{ side, qty, price, full_only, placed_cycle };
+        count++;
+    }
+    Fill pop() { Fill f = q[head]; head = (head + 1) % 2; count--; return f; }
+};
+
+// mirrors sw/arb_trader.c's FLATTEN price/market selection
+static void arb_queue_owed_fill(ArbOwedQueue& owed, int state_before, int16_t residual_before,
+                                 uint8_t pending_before, price_t ask_price_before, price_t bid_price_before,
+                                 qty_t arb_qty_before, const book_t& copy0_before, const book_t& copy1_before, int cycle) {
+    if (state_before == ARB_TRADE1) {
+        owed.push(Ask, arb_qty_before, ask_price_before, false, cycle);
+    } else if (state_before == ARB_TRADE2) {
+        owed.push(Bid, arb_qty_before, bid_price_before, false, cycle);
+    } else if (state_before == ARB_FLATTEN && pending_before == 0 && residual_before != 0) {
+        bool sell = residual_before > 0;
+        price_t price0 = sell ? copy0_before.bid_prices[0] : copy0_before.ask_prices[0];
+        price_t price1 = sell ? copy1_before.bid_prices[0] : copy1_before.ask_prices[0];
+        qty_t   q0     = sell ? copy0_before.bid_qtys[0]   : copy0_before.ask_qtys[0];
+        qty_t   q1     = sell ? copy1_before.bid_qtys[0]   : copy1_before.ask_qtys[0];
+        bool liquid0 = q0 != 0, liquid1 = q1 != 0;
+        bool market;
+        if (liquid0 && liquid1) market = sell ? (price1 > price0) : (price1 < price0);
+        else if (liquid1)       market = true;
+        else                    market = false;
+        if (liquid0 || liquid1) {
+            qty_t res_qty = (qty_t)(sell ? residual_before : -residual_before);
+            owed.push(sell ? Ask : Bid, res_qty, market ? price1 : price0, true, cycle);
+        }
+    }
+}
+
 // directed scenario: ema mean-reversion, drives market 3 toward an OU mid-price
 static void scenario_ema(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, const char* csv_path) {
     printf("=== scenario: ema seed=%u ncyc=%d -> %s ===\n", seed, ncyc, csv_path);
@@ -401,32 +494,14 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
     double basis  = 0.0;
     double cash = 0.0;
 
-    // two insert-before-remove FSMs, one per market, alternating turns (one pad msg/cycle)
-    enum QuotePhase { PH_INSERT_BID, PH_REMOVE_BID, PH_INSERT_ASK, PH_REMOVE_ASK };
-    int     phase[2]         = { PH_INSERT_BID, PH_INSERT_BID };
-    price_t bid_price[2]     = { 0, 0 }, ask_price[2]     = { 0, 0 };
-    price_t old_bid_price[2] = { 0, 0 }, old_ask_price[2] = { 0, 0 };
-    qty_t   bid_qty[2]       = { 0, 0 }, ask_qty[2]       = { 0, 0 };
-    qty_t   old_bid_qty[2]   = { 0, 0 }, old_ask_qty[2]   = { 0, 0 };
-    int turn = 0;   // which market's quote FSM gets to act this cycle
-
-    // owed-fill FIFO (max 2 outstanding legs); `cycle` is the order's placement
-    // cycle, kept so its fill marker can be plotted where it was quoted, not where it lands
-    struct OwedFill { ob_side_t side; qty_t qty; price_t price; bool full_only; int cycle; };
-    OwedFill owed[2]; int owed_head = 0, owed_count = 0;
-    auto push_owed = [&](ob_side_t side, qty_t q, price_t price, bool full_only, int placed_cycle) {
-        // never overflows: the trader emits at most one leg per ARB_TRADE1/ARB_TRADE2/
-        // ARB_FLATTEN transition, and is never in two leg-emitting states at once
-        if (owed_count >= 2) return;
-        owed[(owed_head + owed_count) % 2] = OwedFill{ side, q, price, full_only, placed_cycle };
-        owed_count++;
-    };
+    ArbQuoteFSM quote;
+    ArbOwedQueue owed;
     int fill_cooldown = 0;
 
     // a sent message lands one cycle later (registered input), so credit/log the fill
     // we sent on the NEXT iteration, when m->arb.residual actually moves
     bool in_flight_valid = false;
-    OwedFill in_flight{ Bid, 0, 0, false, 0 };
+    ArbOwedQueue::Fill in_flight{ Bid, 0, 0, false, 0 };
 
     for (int i = 0; i < ncyc; i++) {
         common += theta_c * (mu - common) + sigma_c * noise(rng);
@@ -445,49 +520,16 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
         int sent_cycle = 0;
 
         if (fill_cooldown > 0) fill_cooldown--;
-        if (fill_cooldown == 0 && owed_count > 0 && rnd(0, 4) < 4) {
-            OwedFill o = owed[owed_head];
+        if (fill_cooldown == 0 && owed.count > 0 && rnd(0, 4) < 4) {
+            ArbOwedQueue::Fill o = owed.pop();
             qty_t fqty = o.qty;
             if (!o.full_only && rnd(0, 4) == 0)   // ~20% of non-flatten legs: partial fill
                 fqty = o.qty > 1 ? (qty_t)rnd(1, o.qty - 1) : o.qty;
             in = InMsg{ true, MSG_PRIVATE, 0, Insert, o.side, 0, fqty };
             sending_fill = true; sent_side = o.side; sent_qty = fqty; sent_price = o.price; sent_cycle = o.cycle;
-            owed_head = (owed_head + 1) % 2; owed_count--;
             fill_cooldown = FILL_COOLDOWN_CYCLES;
         } else {
-            int k = turn; turn ^= 1;
-            switch (phase[k]) {
-            case PH_INSERT_BID: {
-                double bp = mid[k] - spread / 2.0;
-                if (bp < 1) bp = 1; if (bp > PRICE_MAX - 1) bp = PRICE_MAX - 1;
-                old_bid_price[k] = bid_price[k]; old_bid_qty[k] = bid_qty[k];
-                bid_price[k] = (price_t)bp; bid_qty[k] = (qty_t)qty;
-                in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Insert, Bid, bid_price[k], bid_qty[k] };
-                phase[k] = PH_REMOVE_BID;
-                break;
-            }
-            case PH_REMOVE_BID:
-                if (old_bid_qty[k] > 0)
-                    in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Remove, Bid, old_bid_price[k], old_bid_qty[k] };
-                old_bid_qty[k] = 0;
-                phase[k] = PH_INSERT_ASK;
-                break;
-            case PH_INSERT_ASK: {
-                double ap = mid[k] + spread / 2.0;
-                if (ap < 1) ap = 1; if (ap > PRICE_MAX - 1) ap = PRICE_MAX - 1;
-                old_ask_price[k] = ask_price[k]; old_ask_qty[k] = ask_qty[k];
-                ask_price[k] = (price_t)ap; ask_qty[k] = (qty_t)qty;
-                in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Insert, Ask, ask_price[k], ask_qty[k] };
-                phase[k] = PH_REMOVE_ASK;
-                break;
-            }
-            case PH_REMOVE_ASK:
-                if (old_ask_qty[k] > 0)
-                    in = InMsg{ true, MSG_PUBLIC, (uint8_t)k, Remove, Ask, old_ask_price[k], old_ask_qty[k] };
-                old_ask_qty[k] = 0;
-                phase[k] = PH_INSERT_BID;
-                break;
-            }
+            in = arb_quote_step(quote, mid, spread, (qty_t)qty);
         }
 
         int     state_before    = (int)m->arb.state;
@@ -504,28 +546,8 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
             return;
         }
 
-        // a leg/flatten order just got emitted this cycle -> queue the fill it needs
-        if (state_before == ARB_TRADE1)
-            push_owed(Ask, arb_qty_before, ask_price_before, false, i);
-        else if (state_before == ARB_TRADE2)
-            push_owed(Bid, arb_qty_before, bid_price_before, false, i);
-        else if (state_before == ARB_FLATTEN && pending_before == 0 && residual_before != 0) {
-            // mirrors sw/arb_trader.c's FLATTEN price/market selection
-            bool sell = residual_before > 0;
-            price_t price0 = sell ? copy0_before.bid_prices[0] : copy0_before.ask_prices[0];
-            price_t price1 = sell ? copy1_before.bid_prices[0] : copy1_before.ask_prices[0];
-            qty_t   q0     = sell ? copy0_before.bid_qtys[0]   : copy0_before.ask_qtys[0];
-            qty_t   q1     = sell ? copy1_before.bid_qtys[0]   : copy1_before.ask_qtys[0];
-            bool liquid0 = q0 != 0, liquid1 = q1 != 0;
-            bool market;
-            if (liquid0 && liquid1) market = sell ? (price1 > price0) : (price1 < price0);
-            else if (liquid1)       market = true;
-            else                    market = false;
-            if (liquid0 || liquid1) {
-                qty_t res_qty = (qty_t)(sell ? residual_before : -residual_before);
-                push_owed(sell ? Ask : Bid, res_qty, market ? price1 : price0, true, i);
-            }
-        }
+        arb_queue_owed_fill(owed, state_before, residual_before, pending_before, ask_price_before,
+                            bid_price_before, arb_qty_before, copy0_before, copy1_before, i);
 
         // settle the PREVIOUS iteration's in-flight fill (this iteration's send lands next)
         int delta = (int)m->arb.residual - (int)residual_before;
@@ -540,7 +562,7 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
             else                    cash += (double)landed_price * landed_qty;   // sold
         }
         in_flight_valid = sending_fill;
-        if (sending_fill) in_flight = OwedFill{ sent_side, sent_qty, sent_price, false, sent_cycle };
+        if (sending_fill) in_flight = ArbOwedQueue::Fill{ sent_side, sent_qty, sent_price, false, sent_cycle };
 
         double mid0 = ((double)m->ob[0].bid_prices[0] + (double)m->ob[0].ask_prices[0]) / 2.0;
         double mid1 = ((double)m->ob[1].bid_prices[0] + (double)m->ob[1].ask_prices[0]) / 2.0;
@@ -641,6 +663,155 @@ static void scenario_momentum(Vhft_chip* dut, ChipModel* m, uint32_t seed, int n
     printf("scenario final cash=%.2f position=%d\n", cash, (int)m->mom.position);
 }
 
+// directed scenario: all three traders' markets driven concurrently to exercise the arbiter
+static void scenario_collision(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, const char* csv_path) {
+    printf("=== scenario: collision seed=%u ncyc=%d -> %s ===\n", seed, ncyc, csv_path);
+    std::mt19937 rng(seed);
+    std::normal_distribution<double> noise(0.0, 1.0);
+    auto rnd = [&](int lo, int hi) { return (int)(rng() % (hi - lo + 1)) + lo; };
+    reset(dut, m);
+
+    FILE* f = fopen(csv_path, "w");
+    fprintf(f, "cycle,arb_want,mom_want,ema_want,collision,winner_market,priority_ok\n");
+
+    const double mu = (double)PRICE_MAX / 2.0;
+    const int spread = 2;
+
+    double ema_mid = mu;
+    const double ema_theta = 0.1, ema_sigma = 6.0;
+    const int ema_qty = 40;
+    QuoteFSM ema_quote;
+    int ema_cooldown = 0;
+
+    double mom_flow = 0.0, mom_perm = 0.0, mom_mid = mu;
+    const double mom_theta_flow = 0.08, mom_sigma_flow = 1.0;
+    const double mom_theta_perm = 0.0045, mom_beta = 0.6;
+    const double mom_theta_mid = 0.15, mom_price_sigma = 0.6;
+    const int mom_base_qty = 24; const double mom_skew_k = 6.0;
+    QuoteFSM mom_quote;
+    int mom_cooldown = 0;
+
+    double arb_common = mu, arb_basis = 0.0;
+    const double arb_theta_c = 0.02, arb_sigma_c = 1.2;
+    const double arb_theta_b = 0.05, arb_sigma_b = 0.9;
+    const int arb_qty_const = 40;
+    ArbQuoteFSM arb_quote;
+    ArbOwedQueue arb_owed;
+    int arb_cooldown = 0;
+
+    long collisions = 0;
+
+    for (int i = 0; i < ncyc; i++) {
+        ema_mid += ema_theta * (mu - ema_mid) + ema_sigma * noise(rng);
+        if (ema_mid < spread + 2) ema_mid = spread + 2;
+        if (ema_mid > (double)PRICE_MAX - spread - 2) ema_mid = PRICE_MAX - spread - 2;
+
+        mom_flow += -mom_theta_flow * mom_flow + mom_sigma_flow * noise(rng);
+        mom_perm += -mom_theta_perm * mom_perm + mom_beta * mom_flow;
+        mom_mid  += mom_theta_mid * (mu + mom_perm - mom_mid) + mom_price_sigma * noise(rng);
+        if (mom_mid < spread + 2) mom_mid = spread + 2;
+        if (mom_mid > (double)PRICE_MAX - spread - 2) mom_mid = PRICE_MAX - spread - 2;
+
+        arb_common += arb_theta_c * (mu - arb_common) + arb_sigma_c * noise(rng);
+        if (arb_common < spread + 4) arb_common = spread + 4;
+        if (arb_common > (double)PRICE_MAX - spread - 4) arb_common = PRICE_MAX - spread - 4;
+        arb_basis += -arb_theta_b * arb_basis + arb_sigma_b * noise(rng);
+        double arb_mid[2] = { arb_common - arb_basis / 2.0, arb_common + arb_basis / 2.0 };
+        for (int k = 0; k < 2; k++) {
+            if (arb_mid[k] < spread + 2) arb_mid[k] = spread + 2;
+            if (arb_mid[k] > (double)PRICE_MAX - spread - 2) arb_mid[k] = PRICE_MAX - spread - 2;
+        }
+
+        if (ema_cooldown > 0) ema_cooldown--;
+        if (mom_cooldown > 0) mom_cooldown--;
+        if (arb_cooldown > 0) arb_cooldown--;
+
+        bool ema_want_fill = ema_cooldown == 0 && m->ema.pending > 0 && rnd(0, 4) < 4;
+        bool mom_want_fill = mom_cooldown == 0 && m->mom.pending > 0 && rnd(0, 4) < 4;
+        bool arb_want_fill = arb_cooldown == 0 && arb_owed.count > 0 && rnd(0, 4) < 4;
+
+        int sel = rnd(0, 2);   // 0=arb 1=mom 2=ema
+        InMsg in{ false, 0, 0, Insert, Bid, 0, 0 };
+
+        if (sel == 0) {
+            if (arb_want_fill) {
+                ArbOwedQueue::Fill o = arb_owed.pop();
+                qty_t fqty = o.qty;
+                if (!o.full_only && rnd(0, 4) == 0) fqty = o.qty > 1 ? (qty_t)rnd(1, o.qty - 1) : o.qty;
+                in = InMsg{ true, MSG_PRIVATE, 0, Insert, o.side, 0, fqty };
+                arb_cooldown = FILL_COOLDOWN_CYCLES;
+            } else {
+                in = arb_quote_step(arb_quote, arb_mid, spread, (qty_t)arb_qty_const);
+            }
+        } else if (sel == 1) {
+            if (mom_want_fill) {
+                qty_t cap = m->mom.order_qty > 0 ? m->mom.order_qty : 1;
+                in = InMsg{ true, MSG_PRIVATE, 2, Insert, m->mom.order_side, 0, (qty_t)rnd(1, cap) };
+                mom_cooldown = FILL_COOLDOWN_CYCLES;
+            } else {
+                double raw_bid = mom_base_qty + (mom_flow > 0 ? mom_flow : 0.0) * mom_skew_k;
+                double raw_ask = mom_base_qty + (mom_flow < 0 ? -mom_flow : 0.0) * mom_skew_k;
+                qty_t sb = (qty_t)(raw_bid > 255.0 ? 255.0 : (raw_bid < 1.0 ? 1.0 : raw_bid));
+                qty_t sa = (qty_t)(raw_ask > 255.0 ? 255.0 : (raw_ask < 1.0 ? 1.0 : raw_ask));
+                double bp = mom_mid - spread / 2.0, ap = mom_mid + spread / 2.0;
+                if (bp < 1) bp = 1; if (bp > PRICE_MAX - 1) bp = PRICE_MAX - 1;
+                if (ap < 1) ap = 1; if (ap > PRICE_MAX - 1) ap = PRICE_MAX - 1;
+                in = quote_step(mom_quote, 2, (price_t)bp, sb, (price_t)ap, sa);
+            }
+        } else {
+            if (ema_want_fill) {
+                qty_t cap = m->ema.order_qty > 0 ? m->ema.order_qty : 1;
+                in = InMsg{ true, MSG_PRIVATE, 3, Insert, m->ema.order_side, 0, (qty_t)rnd(1, cap) };
+                ema_cooldown = FILL_COOLDOWN_CYCLES;
+            } else {
+                double bp = ema_mid - spread / 2.0, ap = ema_mid + spread / 2.0;
+                if (bp < 1) bp = 1; if (bp > PRICE_MAX - 1) bp = PRICE_MAX - 1;
+                if (ap < 1) ap = 1; if (ap > PRICE_MAX - 1) ap = PRICE_MAX - 1;
+                in = quote_step(ema_quote, 3, (price_t)bp, (qty_t)ema_qty, (price_t)ap, (qty_t)ema_qty);
+            }
+        }
+
+        int state_before = (int)m->arb.state;
+        int16_t residual_before = m->arb.residual;
+        uint8_t pending_before = m->arb.pending;
+        price_t ask_price_before = m->arb.ask_price, bid_price_before = m->arb.bid_price;
+        qty_t arb_qty_before = m->arb.arb_qty;
+        book_t copy0_before = m->copy[0], copy1_before = m->copy[1];
+
+        char label[40]; snprintf(label, sizeof label, "collision_scn#%d", i);
+        if (!cycle(dut, m, in, label)) {
+            printf("  (mismatch at cycle %d)\n", i);
+            fclose(f);
+            return;
+        }
+
+        arb_queue_owed_fill(arb_owed, state_before, residual_before, pending_before, ask_price_before,
+                            bid_price_before, arb_qty_before, copy0_before, copy1_before, i);
+
+        int nwant = (int)m->last_arb_want + (int)m->last_mom_want + (int)m->last_ema_want;
+        bool collision = nwant >= 2;
+        if (collision) {
+            collisions++;
+            bool priority_ok = m->last_arb_want
+                ? (dut->valid_o && (dut->market_o == 0 || dut->market_o == 1))
+                : m->last_mom_want
+                    ? (dut->valid_o && dut->market_o == 2)
+                    : (dut->valid_o && dut->market_o == 3);
+            if (!priority_ok) {
+                printf("FAIL [collision@%d] arb_want=%d mom_want=%d ema_want=%d DUT market=%d valid=%d\n",
+                       i, m->last_arb_want, m->last_mom_want, m->last_ema_want, dut->market_o, dut->valid_o);
+                g_errors++;
+            }
+            fprintf(f, "%d,%d,%d,%d,1,%d,%d\n", i, (int)m->last_arb_want, (int)m->last_mom_want,
+                    (int)m->last_ema_want, dut->market_o, (int)priority_ok);
+        } else if (i >= WARMUP_CYCLES) {
+            fprintf(f, "%d,%d,%d,%d,0,-1,-1\n", i, (int)m->last_arb_want, (int)m->last_mom_want, (int)m->last_ema_want);
+        }
+    }
+    fclose(f);
+    printf("scenario collisions exercised: %ld\n", collisions);
+}
+
 using ScenarioFn = void (*)(Vhft_chip*, ChipModel*, uint32_t, int, const char*);
 
 static int run_scenario(Vhft_chip* dut, ChipModel* m, ScenarioFn fn, char** argv) {
@@ -672,6 +843,8 @@ int main(int argc, char** argv) {
         return run_scenario(dut, &m, scenario_arb, argv);
     } else if (argc >= 6 && strcmp(argv[1], "--scenario") == 0 && strcmp(argv[2], "momentum") == 0) {
         return run_scenario(dut, &m, scenario_momentum, argv);
+    } else if (argc >= 6 && strcmp(argv[1], "--scenario") == 0 && strcmp(argv[2], "collision") == 0) {
+        return run_scenario(dut, &m, scenario_collision, argv);
     }
 
     int rc = run_random(dut, &m, seed, ncyc);
