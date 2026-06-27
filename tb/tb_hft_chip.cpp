@@ -11,18 +11,17 @@
 #include "momentum_trader.h"
 #include "ema_trader.h"
 
-// Whole-chip TB. A cycle-accurate composite golden model reproduces the chip
-// datapath: 4 orderbooks (orderbook.c) -> 1-cycle registered copies -> 3 traders
-// -> fixed-priority arbitration (arb>mom>ema) -> 1-cycle output register. The
-// chip only exposes *trades* at its pads, so the model maintains all internal
-// state and predicts the trade bus every cycle.
+// Whole-chip TB. The model reproduces the full datapath cycle-accurately: 4
+// orderbooks -> registered copies -> 3 traders -> fixed-priority arbitration
+// (arb>mom>ema) -> registered output. The chip only exposes trades at its
+// pads, so the model tracks all internal state to predict the trade bus.
 //
-// Latencies modelled exactly:
-//   * inputs are registered at the pad boundary (+1 cycle before the core acts)
-//   * orderbook output is registered          (+1 cycle from a book-changing msg)
-//   * hft_chip registers a copy of the book  (+1 cycle before a trader sees it)
-//   * private fills reach traders in the same cycle the book sees the input
-//   * the output bus is registered            (+1 cycle from a trader decision)
+// latencies modeled:
+//   inputs register at the pad boundary (+1 cycle before the core reacts)
+//   orderbook output registers (+1 cycle after a book-changing msg)
+//   hft_chip registers a copy of the book (+1 cycle before a trader sees it)
+//   private fills reach traders the same cycle the book sees the input
+//   output bus registers (+1 cycle after a trader decides)
 
 static const int ARB_THRESHOLD = 2;     // matches rtl/arb_trader.sv default
 enum { MSG_PUBLIC = 0, MSG_PRIVATE = 1 };
@@ -68,9 +67,9 @@ static void model_init(ChipModel* m) {
     m->last_arb_want = m->last_mom_want = m->last_ema_want = false;
 }
 
-// advance the model one clock under input `in_new`. The chip registers its
-// inputs at the pad boundary, so the core acts on the PREVIOUS cycle's input
-// (m->in_q); `in_new` is registered for next cycle. Updates m->out (registered).
+// advances the model one clock under input in_new. Inputs are registered at
+// the pad boundary, so the core acts on the previous cycle's input (m->in_q),
+// while in_new just gets latched for next cycle.
 static void model_advance(ChipModel* m, const InMsg& in_new) {
     const InMsg in = m->in_q;   // registered input the core sees this cycle
     bool pub  = in.valid && in.msg_type == MSG_PUBLIC;
@@ -176,14 +175,14 @@ static bool cycle(Vhft_chip* dut, ChipModel* m, const InMsg& in, const char* lab
 }
 
 // ---------------- constrained-random stimulus ----------------
-// Generate a legal public book op for `mk` so the orderbook doesn't latch a
-// (sticky, chip-global) error; mirrors orderbook.c legality.
+// generates a legal public book op for market mk so the orderbook doesn't
+// latch a (sticky, chip-global) error; mirrors orderbook.c's legality rules
 static InMsg gen_public(ChipModel* m, uint8_t mk, std::mt19937& rng) {
     auto rnd = [&](int lo, int hi) { return (int)(rng() % (hi - lo + 1)) + lo; };
     InMsg in{ true, MSG_PUBLIC, mk, Insert, rnd(0,1) ? Ask : Bid, 0, 0 };
-    // The chip registers inputs at the pad boundary, so this op lands one cycle
-    // later, after the in-flight input (m->in_q) has already updated the book.
-    // Validate against that post-update state so we never emit a stale-illegal op.
+    // inputs register at the pad boundary, so this op lands one cycle later,
+    // after the in-flight input (m->in_q) has already updated the book -
+    // validate against that post-update state so we never emit a stale-illegal op
     orderbook_t scratch = m->ob[mk];
     const InMsg& fl = m->in_q;
     if (fl.valid && fl.msg_type == MSG_PUBLIC && fl.market == mk)
@@ -228,8 +227,8 @@ static int run_random(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc) {
 
     for (int i = 0; i < ncyc; i++) {
         InMsg in;
-        // drain outstanding orders aggressively so trader `pending` never wraps
-        // into a spurious (sticky) error; only ever fill when pending>0.
+        // drain outstanding orders aggressively so a trader's pending count never
+        // wraps into a spurious sticky error; only ever fill when pending>0
         int pa = m->arb.pending, pm = m->mom.pending, pe = m->ema.pending;
         int pmax = pa; if (pm > pmax) pmax = pm; if (pe > pmax) pmax = pe;
 
@@ -255,7 +254,7 @@ static int run_random(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc) {
 // ---------------- shared single-market scenario helpers ----------------
 // insert-before-remove quoting FSM: always quote a fresh level before removing
 // the old one, so the market's book never goes empty. Shared by the ema and
-// momentum scenarios, which each drive exactly one market.
+// momentum scenarios, each of which drives exactly one market.
 struct QuoteFSM {
     enum Phase { PH_INSERT_BID, PH_REMOVE_BID, PH_INSERT_ASK, PH_REMOVE_ASK };
     int phase = PH_INSERT_BID;
@@ -295,9 +294,9 @@ static InMsg quote_step(QuoteFSM& q, uint8_t market, price_t bid_target, qty_t b
 }
 
 // drains a resting order by sending a private fill against it, once one is
-// outstanding (`pending>0`) and a cooldown has elapsed. Shared by the ema and
-// momentum scenarios, whose trader models (mom_model_t/ema_model_t) share the
-// same pending/order_qty/order_side field layout.
+// outstanding (pending>0) and a cooldown has elapsed. Shared by the ema and
+// momentum scenarios, whose models share the same pending/order_qty/order_side
+// field layout.
 static bool gen_drain_fill(uint8_t market, uint8_t pending, qty_t order_qty, ob_side_t order_side,
                             int& fill_cooldown, std::mt19937& rng, InMsg& out) {
     auto rnd = [&](int lo, int hi) { return (int)(rng() % (hi - lo + 1)) + lo; };
@@ -309,8 +308,7 @@ static bool gen_drain_fill(uint8_t market, uint8_t pending, qty_t order_qty, ob_
     return true;
 }
 
-// same idea as QuoteFSM but for arb, which quotes two markets (0/1) and alternates
-// which one's FSM gets to act each turn, since only one pad message fits per cycle
+// QuoteFSM, but for arb: two markets, alternating turns
 struct ArbQuoteFSM {
     enum Phase { PH_INSERT_BID, PH_REMOVE_BID, PH_INSERT_ASK, PH_REMOVE_ASK };
     int     phase[2]         = { PH_INSERT_BID, PH_INSERT_BID };
@@ -359,9 +357,8 @@ static InMsg arb_quote_step(ArbQuoteFSM& q, const double mid[2], int spread, qty
     return in;
 }
 
-// FIFO of legs arb still needs filled (max 2 outstanding: it never re-enters a
-// leg-emitting state while one is already pending). `cycle` is the order's
-// placement cycle, kept so a CSV plot can anchor the fill where it was quoted.
+// FIFO of legs still owed a fill (max 2 outstanding); cycle lets a CSV
+// plot anchor the fill at the cycle the order was quoted, not where it lands
 struct ArbOwedQueue {
     struct Fill { ob_side_t side; qty_t qty; price_t price; bool full_only; int cycle; };
     Fill q[2]; int head = 0, count = 0;
@@ -486,8 +483,8 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
     const double mu     = (double)PRICE_MAX / 2.0;
     const int    spread = 2;
     const int    qty    = 40;
-    // shared OU `common` (both markets' mid) + small OU `basis` (mid1-mid0); basis
-    // is tuned to occasionally drift past +/-ARB_THRESHOLD for smooth, small arb windows
+    // shared OU common (both markets' mid) plus a small OU basis (mid1-mid0),
+    // tuned to occasionally drift past +/-ARB_THRESHOLD for smooth, small arb windows
     const double theta_c = 0.02, sigma_c = 1.2;
     const double theta_b = 0.05, sigma_b = 0.9;
     double common = mu;
@@ -579,10 +576,8 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
     printf("scenario final cash=%.2f residual=%d\n", cash, (int)m->arb.residual);
 }
 
-// directed scenario: momentum_trader on market 2. `flow` (OU) sets the instantaneous
-// bid/ask qty skew (the imbalance signal); a slower `permanent` accumulator fed by `flow`
-// shifts mid's target, giving imbalance a real, lasting lead over price (transient +
-// permanent impact, Kyle's-lambda-style) instead of a bump that mean-reversion erases.
+// directed scenario: momentum_trader on market 2. flow (OU) drives the bid/ask
+// qty skew; permanent accumulates it into mid so imbalance leads price, not just bumps it
 static void scenario_momentum(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, const char* csv_path) {
     printf("=== scenario: momentum seed=%u ncyc=%d -> %s ===\n", seed, ncyc, csv_path);
     std::mt19937 rng(seed);
