@@ -360,11 +360,11 @@ static InMsg arb_quote_step(ArbQuoteFSM& q, const double mid[2], int spread, qty
 // FIFO of legs still owed a fill (max 2 outstanding); cycle lets a CSV
 // plot anchor the fill at the cycle the order was quoted, not where it lands
 struct ArbOwedQueue {
-    struct Fill { ob_side_t side; qty_t qty; price_t price; bool full_only; int cycle; };
+    struct Fill { ob_side_t side; qty_t qty; price_t price; bool full_only; int cycle; bool market; };
     Fill q[2]; int head = 0, count = 0;
-    void push(ob_side_t side, qty_t qty, price_t price, bool full_only, int placed_cycle) {
+    void push(ob_side_t side, qty_t qty, price_t price, bool full_only, int placed_cycle, bool market) {
         if (count >= 2) return;
-        q[(head + count) % 2] = Fill{ side, qty, price, full_only, placed_cycle };
+        q[(head + count) % 2] = Fill{ side, qty, price, full_only, placed_cycle, market };
         count++;
     }
     Fill pop() { Fill f = q[head]; head = (head + 1) % 2; count--; return f; }
@@ -373,11 +373,12 @@ struct ArbOwedQueue {
 // mirrors sw/arb_trader.c's FLATTEN price/market selection
 static void arb_queue_owed_fill(ArbOwedQueue& owed, int state_before, int16_t residual_before,
                                  uint8_t pending_before, price_t ask_price_before, price_t bid_price_before,
+                                 bool ask_market_before, bool bid_market_before,
                                  qty_t arb_qty_before, const book_t& copy0_before, const book_t& copy1_before, int cycle) {
     if (state_before == ARB_TRADE1) {
-        owed.push(Ask, arb_qty_before, ask_price_before, false, cycle);
+        owed.push(Ask, arb_qty_before, ask_price_before, false, cycle, ask_market_before);
     } else if (state_before == ARB_TRADE2) {
-        owed.push(Bid, arb_qty_before, bid_price_before, false, cycle);
+        owed.push(Bid, arb_qty_before, bid_price_before, false, cycle, bid_market_before);
     } else if (state_before == ARB_FLATTEN && pending_before == 0 && residual_before != 0) {
         bool sell = residual_before > 0;
         price_t price0 = sell ? copy0_before.bid_prices[0] : copy0_before.ask_prices[0];
@@ -391,7 +392,7 @@ static void arb_queue_owed_fill(ArbOwedQueue& owed, int state_before, int16_t re
         else                    market = false;
         if (liquid0 || liquid1) {
             qty_t res_qty = (qty_t)(sell ? residual_before : -residual_before);
-            owed.push(sell ? Ask : Bid, res_qty, market ? price1 : price0, true, cycle);
+            owed.push(sell ? Ask : Bid, res_qty, market ? price1 : price0, true, cycle, market);
         }
     }
 }
@@ -478,7 +479,7 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
     reset(dut, m);
 
     FILE* f = fopen(csv_path, "w");
-    fprintf(f, "cycle,mid_target,book_mid,fill_side,fill_qty,fill_price,position,mtm_pnl,error,pending,state,fill_cycle\n");
+    fprintf(f, "cycle,mid_target,book_mid,fill_side,fill_qty,fill_price,fill_market,position,mtm_pnl,error,pending,state,fill_cycle\n");
 
     const double mu     = (double)PRICE_MAX / 2.0;
     const int    spread = 2;
@@ -498,7 +499,7 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
     // a sent message lands one cycle later (registered input), so credit/log the fill
     // we sent on the NEXT iteration, when m->arb.residual actually moves
     bool in_flight_valid = false;
-    ArbOwedQueue::Fill in_flight{ Bid, 0, 0, false, 0 };
+    ArbOwedQueue::Fill in_flight{ Bid, 0, 0, false, 0, false };
 
     for (int i = 0; i < ncyc; i++) {
         common += theta_c * (mu - common) + sigma_c * noise(rng);
@@ -514,7 +515,7 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
 
         InMsg in{ false, 0, 0, Insert, Bid, 0, 0 };
         bool sending_fill = false; ob_side_t sent_side = Bid; qty_t sent_qty = 0; price_t sent_price = 0;
-        int sent_cycle = 0;
+        int sent_cycle = 0; bool sent_market = false;
 
         if (fill_cooldown > 0) fill_cooldown--;
         if (fill_cooldown == 0 && owed.count > 0 && rnd(0, 4) < 4) {
@@ -524,6 +525,7 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
                 fqty = o.qty > 1 ? (qty_t)rnd(1, o.qty - 1) : o.qty;
             in = InMsg{ true, MSG_PRIVATE, 0, Insert, o.side, 0, fqty };
             sending_fill = true; sent_side = o.side; sent_qty = fqty; sent_price = o.price; sent_cycle = o.cycle;
+            sent_market = o.market;
             fill_cooldown = FILL_COOLDOWN_CYCLES;
         } else {
             in = arb_quote_step(quote, mid, spread, (qty_t)qty);
@@ -533,6 +535,7 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
         int16_t residual_before = m->arb.residual;
         uint8_t pending_before  = m->arb.pending;
         price_t ask_price_before = m->arb.ask_price, bid_price_before = m->arb.bid_price;
+        bool    ask_market_before = m->arb.ask_market, bid_market_before = m->arb.bid_market;
         qty_t   arb_qty_before   = m->arb.arb_qty;
         book_t  copy0_before = m->copy[0], copy1_before = m->copy[1];
 
@@ -544,31 +547,34 @@ static void scenario_arb(Vhft_chip* dut, ChipModel* m, uint32_t seed, int ncyc, 
         }
 
         arb_queue_owed_fill(owed, state_before, residual_before, pending_before, ask_price_before,
-                            bid_price_before, arb_qty_before, copy0_before, copy1_before, i);
+                            bid_price_before, ask_market_before, bid_market_before, arb_qty_before,
+                            copy0_before, copy1_before, i);
 
         // settle the PREVIOUS iteration's in-flight fill (this iteration's send lands next)
         int delta = (int)m->arb.residual - (int)residual_before;
         bool landed = in_flight_valid && delta != 0;
         ob_side_t landed_side = Bid; qty_t landed_qty = 0; price_t landed_price = 0; int landed_cycle = i;
+        bool landed_market = false;
         if (landed) {
             landed_side = delta > 0 ? Bid : Ask;
             landed_qty  = (qty_t)(delta > 0 ? delta : -delta);
             landed_price = in_flight.price;
             landed_cycle = in_flight.cycle;   // plot the fill at the order's placement cycle, not the fill's landing cycle
+            landed_market = in_flight.market;
             if (landed_side == Bid) cash -= (double)landed_price * landed_qty;   // bought
             else                    cash += (double)landed_price * landed_qty;   // sold
         }
         in_flight_valid = sending_fill;
-        if (sending_fill) in_flight = ArbOwedQueue::Fill{ sent_side, sent_qty, sent_price, false, sent_cycle };
+        if (sending_fill) in_flight = ArbOwedQueue::Fill{ sent_side, sent_qty, sent_price, false, sent_cycle, sent_market };
 
         double mid0 = ((double)m->ob[0].bid_prices[0] + (double)m->ob[0].ask_prices[0]) / 2.0;
         double mid1 = ((double)m->ob[1].bid_prices[0] + (double)m->ob[1].ask_prices[0]) / 2.0;
         // mark the still-open leg to the cross-market mid, so PnL doesn't spike on one-sided settlement
         double mtm_pnl = cash + (double)m->arb.residual * (mid0 + mid1) / 2.0;
         if (i >= WARMUP_CYCLES)
-            fprintf(f, "%d,%.2f,%.2f,%d,%u,%u,%d,%.2f,%d,%d,%d,%d\n", i, mid0, mid1,
+            fprintf(f, "%d,%.2f,%.2f,%d,%u,%u,%d,%d,%.2f,%d,%d,%d,%d\n", i, mid0, mid1,
                     landed ? (int)landed_side : -1, landed ? landed_qty : 0,
-                    landed ? landed_price : 0,
+                    landed ? landed_price : 0, landed ? (int)landed_market : -1,
                     (int)m->arb.residual, mtm_pnl, (int)m->arb.error, (int)m->arb.pending, (int)m->arb.state,
                     landed ? landed_cycle : -1);
     }
@@ -770,6 +776,7 @@ static void scenario_collision(Vhft_chip* dut, ChipModel* m, uint32_t seed, int 
         int16_t residual_before = m->arb.residual;
         uint8_t pending_before = m->arb.pending;
         price_t ask_price_before = m->arb.ask_price, bid_price_before = m->arb.bid_price;
+        bool ask_market_before = m->arb.ask_market, bid_market_before = m->arb.bid_market;
         qty_t arb_qty_before = m->arb.arb_qty;
         book_t copy0_before = m->copy[0], copy1_before = m->copy[1];
 
@@ -781,7 +788,8 @@ static void scenario_collision(Vhft_chip* dut, ChipModel* m, uint32_t seed, int 
         }
 
         arb_queue_owed_fill(arb_owed, state_before, residual_before, pending_before, ask_price_before,
-                            bid_price_before, arb_qty_before, copy0_before, copy1_before, i);
+                            bid_price_before, ask_market_before, bid_market_before, arb_qty_before,
+                            copy0_before, copy1_before, i);
 
         int nwant = (int)m->last_arb_want + (int)m->last_mom_want + (int)m->last_ema_want;
         bool collision = nwant >= 2;

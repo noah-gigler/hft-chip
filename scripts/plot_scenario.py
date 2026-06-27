@@ -53,6 +53,41 @@ def main():
 
     plt.style.use("seaborn-v0_8-whitegrid")
     title = args.title or args.csv_path
+
+    if args.two_mids:
+        # one panel per market (its own mid + only the fills that landed on that
+        # market's book, per fill_market), plus the shared PnL panel below
+        fig, axes = plt.subplots(3, 1, sharex=True, figsize=(6, 6.0))
+        ax_m0, ax_m1, ax_pnl = axes
+        ax_m0.plot(cycle, mid_target, color="tab:blue", linewidth=0.9)
+        ax_m1.plot(cycle, book_mid, color="tab:orange", linewidth=0.9)
+        for ax, market in ((ax_m0, 0), (ax_m1, 1)):
+            mc = [c for c, r in zip(fill_cycle, fills) if r["fill_market"] == market]
+            mp = [p for p, r in zip(fill_price, fills) if r["fill_market"] == market]
+            mcol = [col for col, r in zip(fill_color, fills) if r["fill_market"] == market]
+            ax.scatter(mc, mp, c=mcol, s=6, linewidths=0, zorder=3)
+        ax_m0.set_ylabel("price")
+        ax_m1.set_ylabel("price")
+        ax_m0.set_xlabel("market0", fontsize=9)
+        ax_m1.set_xlabel("market1", fontsize=9)
+        ax_m0.xaxis.set_label_position("bottom")
+        ax_m1.xaxis.set_label_position("bottom")
+        ax_m0.set_title(title, fontsize=11)
+        ax_pnl.plot(cycle, pnl, color="tab:green", linewidth=1.2)
+        ax_pnl.axhline(0, color="0.7", linewidth=0.6)
+        ax_pnl.set_ylabel("PnL")
+        ax_pnl.set_xlabel("cycle")
+        for ax in axes:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+        fig.tight_layout()
+        if args.out:
+            fig.savefig(args.out, dpi=150)
+            print(f"wrote {args.out}")
+        else:
+            plt.show()
+        return
+
     nrows = 3 if args.imbalance else 2
     fig, axes = plt.subplots(nrows, 1, sharex=True, figsize=(6, 4.2 if nrows == 2 else 5.4))
     if args.imbalance:
@@ -60,11 +95,7 @@ def main():
     else:
         ax_price, ax_pnl = axes
 
-    if args.two_mids:
-        ax_price.plot(cycle, mid_target, color="tab:blue", linewidth=1.1, linestyle="-")
-        ax_price.plot(cycle, book_mid, color="tab:orange", linewidth=1.1, linestyle="-")
-    else:
-        ax_price.plot(cycle, book_mid, color="tab:blue", linewidth=0.8)
+    ax_price.plot(cycle, book_mid, color="tab:blue", linewidth=0.8)
     ax_price.scatter(fill_cycle, fill_price, c=fill_color, s=6, linewidths=0, zorder=3)
     ax_price.set_ylabel("price")
 
