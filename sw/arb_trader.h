@@ -8,6 +8,7 @@ typedef struct {
     arb_state_e state;
     price_t ask_price, bid_price;
     qty_t   arb_qty;
+    qty_t   sent_qty;   // qty of the last leg actually sent, for the fill-qty bound check
     bool    ask_market, bid_market;
     uint8_t pending;    // 2-bit, wraps mod 4
     int16_t residual;   // signed 2*QTY_WIDTH

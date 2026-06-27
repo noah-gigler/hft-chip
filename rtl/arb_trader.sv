@@ -46,6 +46,7 @@ module arb_trader
     price_t ask_price_q,  ask_price_d;
     price_t bid_price_q,  bid_price_d;
     qty_t   arb_qty_q,    arb_qty_d;
+    qty_t   sent_qty_q,   sent_qty_d;
 
     logic   ask_market_q, ask_market_d;
     logic   bid_market_q, bid_market_d;
@@ -60,6 +61,7 @@ module arb_trader
             ask_price_q  <= '0;
             bid_price_q  <= '0;
             arb_qty_q    <= '0;
+            sent_qty_q   <= '0;
             ask_market_q <= '0;
             bid_market_q <= '0;
             pending_q    <= '0;
@@ -70,6 +72,7 @@ module arb_trader
             ask_price_q  <= ask_price_d;
             bid_price_q  <= bid_price_d;
             arb_qty_q    <= arb_qty_d;
+            sent_qty_q   <= sent_qty_d;
             ask_market_q <= ask_market_d;
             bid_market_q <= bid_market_d;
             pending_q    <= pending_d;
@@ -106,9 +109,11 @@ module arb_trader
         ask_price_d  = ask_price_q;
         bid_price_d  = bid_price_q;
         arb_qty_d    = arb_qty_q;
+        sent_qty_d   = sent_qty_q;
         ask_market_d = ask_market_q;
         bid_market_d = bid_market_q;
-        error_d      = error_q | (order_filled_i && pending_q == 0);
+        error_d      = error_q | (order_filled_i && pending_q == 0)
+                                | (order_filled_i && filled_qty_i > sent_qty_q);
 
         // default
         valid_o  = '0;
@@ -171,6 +176,7 @@ module arb_trader
                     side_o   = Ask;
                     price_o  = ask_price_q;
                     qty_o    = arb_qty_q;
+                    sent_qty_d = arb_qty_q;
 
                     pending_d = pend_next + 1'b1;
                     state_d  = TRADE2;
@@ -182,6 +188,7 @@ module arb_trader
                     side_o   = Bid;
                     price_o  = bid_price_q;
                     qty_o    = arb_qty_q;
+                    sent_qty_d = arb_qty_q;
 
                     pending_d = pend_next + 1'b1;
                     state_d  = FLATTEN;
@@ -217,6 +224,7 @@ module arb_trader
                                 side_o    = sell ? Ask : Bid;
                                 price_o   = market ? price1 : price0;
                                 qty_o     = res_qty;
+                                sent_qty_d = res_qty;
                                 pending_d = pend_next + 1'b1;
                             end else begin
                                 valid_o = 1'b0;   // no liquidity

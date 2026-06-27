@@ -23,7 +23,8 @@ trade_out_t ema_step(ema_model_t *m, const book_t *b,
     int mid = (b->bid_prices[0] + b->ask_prices[0]) >> 1;   // 10-bit unsigned
     int mid_scaled = mid << EMA_SHIFT;                       // signed 14-bit
 
-    bool error_d = m->error || (order_filled && m->pending == 0);
+    bool error_d = m->error || (order_filled && m->pending == 0)
+                             || (order_filled && filled_qty > m->order_qty);
     trade_out_t o = { false, false, Bid, 0, 0, error_d };
 
     ema_model_t n = *m;

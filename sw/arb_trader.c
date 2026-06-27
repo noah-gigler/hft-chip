@@ -2,7 +2,7 @@
 
 void arb_init(arb_model_t *m) {
     m->state = ARB_IDLE;
-    m->ask_price = 0; m->bid_price = 0; m->arb_qty = 0;
+    m->ask_price = 0; m->bid_price = 0; m->arb_qty = 0; m->sent_qty = 0;
     m->ask_market = false; m->bid_market = false;
     m->pending = 0; m->residual = 0; m->error = false;
 }
@@ -12,7 +12,8 @@ trade_out_t arb_step(arb_model_t *m,
                      bool order_filled, qty_t filled_qty, ob_side_t filled_side,
                      int arb_threshold) {
     // error_d = error_q | (order_filled & pending_q==0)
-    bool error_d = m->error || (order_filled && m->pending == 0);
+    bool error_d = m->error || (order_filled && m->pending == 0)
+                             || (order_filled && filled_qty > m->sent_qty);
 
     trade_out_t o = { false, false, Bid, 0, 0, error_d };
 
@@ -56,6 +57,7 @@ trade_out_t arb_step(arb_model_t *m,
         case ARB_TRADE1:
             o.valid = true; o.market = m->ask_market; o.side = Ask;
             o.price = m->ask_price; o.qty = m->arb_qty;
+            n.sent_qty = m->arb_qty;
             n.pending = (uint8_t)((pend_next + 1) & 0x3);
             n.state = ARB_TRADE2;
             break;
@@ -63,6 +65,7 @@ trade_out_t arb_step(arb_model_t *m,
         case ARB_TRADE2:
             o.valid = true; o.market = m->bid_market; o.side = Bid;
             o.price = m->bid_price; o.qty = m->arb_qty;
+            n.sent_qty = m->arb_qty;
             n.pending = (uint8_t)((pend_next + 1) & 0x3);
             n.state = ARB_FLATTEN;
             break;
@@ -86,6 +89,7 @@ trade_out_t arb_step(arb_model_t *m,
                     if (liquid0 || liquid1) {
                         o.valid = true; o.market = market; o.side = sell ? Ask : Bid;
                         o.price = market ? price1 : price0; o.qty = res_qty;
+                        n.sent_qty = res_qty;
                         n.pending = (uint8_t)((pend_next + 1) & 0x3);
                     }
                 }

@@ -75,12 +75,11 @@ Two interchangeable impls behind the `orderbook` wrapper (`rtl/orderbook.sv`), s
 - `orderbook_unsorted.sv` — unsorted pool, best computed combinationally. Treats the full `[0,511]` price range as valid (no sentinels). **This is the taped-out impl.**
 - `orderbook_sorted.sv` — sorted shift register, best is always level 0. Uses reserved sentinel prices (0/511) for empty levels; see `spec.md`. Select with `OB_UNSORTED=0`.
 
-Both are proven behaviorally identical at top-of-book by `tb/tb_orderbook_equiv.sv` (`make -C tb equiv`), so `hft_core` is impl-agnostic.
+Both are checked directly against the same golden C model (`sw/orderbook.c`, which is sorted by construction): `orderbook_sorted` gets a full per-level state check, `orderbook_unsorted` gets a top-of-book + qty-sum check (its internal slot order has no sorted counterpart). Prices 0 (bid) and 511 (ask) are excluded from `orderbook_unsorted`'s random stimulus — they collide with `orderbook_sorted`'s empty-slot sentinel, so the model drops them even when the unsorted impl has room; this is genuine, documented divergence at the boundary prices, not a bug.
 
 ### Known RTL concerns
 
-- **Fill contract unenforced**: `filled_qty` (ext, up to 255) not bounded to ordered qty → `position` (signed 10-bit) can wrap; residual can exceed 8 bits (arb qty truncation).
-- **`pending` is 2-bit** in all traders: >3 outstanding orders wraps → spurious error.
+- **Fill contract enforced**: all three traders error if a Private fill's `filled_qty` exceeds the qty actually ordered (tracked via `order_qty_q` for momentum/ema, `sent_qty_q` for arb). Closes the previous wrap/truncation risk on `position`/`residual`.
 - **`error` is sticky + global**: one bad message bricks all chip output — deliberate per Noah.
 
 ## Flow
@@ -109,11 +108,10 @@ Run: `bash scripts/remote.sh run "make -C tb <target>"`
 
 | Target | What it tests |
 |--------|---------------|
-| `orderbook` | Directed `.vec` + constrained-random; targets `orderbook_sorted` directly |
+| `orderbook` | Directed `.vec` + constrained-random against the golden model; runs both `orderbook_sorted` (full book state) and `orderbook_unsorted` (top-of-book + qty sums, the taped-out impl) |
 | `arb` / `momentum` / `ema` | Unit, cycle-accurate trader models |
 | `chip` | Full `hft_chip` via `pad_stubs.sv`; composite model = input register + 4 OBs + top-of-book pipeline + 3 traders + arbitration + output register. Defaults to unsorted (taped-out); `OB_UNSORTED=0` for sorted |
 | `all` | All of the above (~100k random cycles each) |
-| `equiv` | `orderbook_sorted` vs `orderbook_unsorted` equivalence (no C model, self-checking SV); add `EQ_N=`/`EQ_NOPS=` to tune |
 
 **Key principle**: golden models are transcribed from the RTL, so passing proves DUT == model (self-consistency), not spec-correctness. Only `anchor_checks()` are independent.
 

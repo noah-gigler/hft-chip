@@ -86,7 +86,8 @@ module momentum_trader
         order_side_d  = order_side_q;
         order_price_d = order_price_q;
         order_qty_d   = order_qty_q;
-        error_d      = error_q | (order_filled_i && pending_q == 0);
+        error_d      = error_q | (order_filled_i && pending_q == 0)
+                                | (order_filled_i && filled_qty_i > order_qty_q);
 
         // default
         valid_o  = '0;
