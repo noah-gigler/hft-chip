@@ -6,7 +6,7 @@
 
 #define PRICE_WIDTH 9
 #define QTY_WIDTH   8
-#define N           32      // price levels per side; matches hft_chip localparam N
+#define N           64      // price levels per side; matches hft_chip localparam N
 
 #define PRICE_MAX   ((1u << PRICE_WIDTH) - 1)
 #define QTY_MAX     ((1u << QTY_WIDTH)   - 1)

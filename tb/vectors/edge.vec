@@ -69,15 +69,6 @@ insert bid 1 1           # book full: bids [64..1]
 insert bid 100 1         # 100 > every tracked bid -> new best, evicts worst level (1)
 insert bid 0 1           # 0 is worse than every tracked bid on a full book -> drop, no error
 
-# --- reserved sentinel prices (0=bid, 511=ask): inserts drop silently, no error ---
-reset
-insert bid 50 4          # occupied bid level
-insert bid 0 7           # bid sentinel -> dropped, book unchanged, no error
-insert ask 460 3         # occupied ask level
-insert ask 511 9         # ask sentinel -> dropped, book unchanged, no error
-remove bid 50 4          # normal ops still work after a dropped sentinel
-remove ask 460 3
-
 # --- qty overflow latches error ---
 reset
 insert bid 100 200

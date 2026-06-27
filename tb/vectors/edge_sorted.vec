@@ -1,0 +1,11 @@
+# orderbook_sorted-only: prices 0/511 collide with its empty-slot sentinel
+# and get dropped even with room. orderbook_unsorted has no such restriction
+# (see spec.md) - run only against tb_orderbook.
+
+reset
+insert bid 50 4          # occupied bid level
+insert bid 0 7           # bid sentinel -> dropped, book unchanged, no error
+insert ask 460 3         # occupied ask level
+insert ask 511 9         # ask sentinel -> dropped, book unchanged, no error
+remove bid 50 4          # normal ops still work after a dropped sentinel
+remove ask 460 3

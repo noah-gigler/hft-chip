@@ -17,30 +17,41 @@ TRADERS := $(RTL)/arb_trader.sv $(RTL)/momentum_trader.sv $(RTL)/ema_trader.sv
 MODELS  := $(SW)/orderbook.c $(SW)/arb_trader.c \
            $(SW)/momentum_trader.c $(SW)/ema_trader.c
 
-.PHONY: all sim orderbook arb momentum ema chip equiv vectors random clean
+.PHONY: all sim orderbook arb momentum ema chip vectors random clean
 
 all: orderbook arb momentum ema chip
 
 # ---------------- orderbook ----------------
-# unit test checks full book state, so it targets orderbook_sorted directly
-# (--prefix keeps the Vorderbook class name the cpp expects)
-$(OBJ)/Vorderbook: $(RTL)/orderbook_sorted.sv tb_orderbook.cpp $(SW)/orderbook.c $(SW)/orderbook.h $(PKG)
+# orderbook_sorted: unit test checks full book state directly.
+# orderbook_unsorted: the impl that tapes out; checked directly against the
+# same golden model (top-of-book + qty sums only, see tb_orderbook_unsorted.cpp).
+# (--prefix keeps the Vorderbook* class names the cpps expect)
+$(OBJ)/Vorderbook: $(RTL)/orderbook_sorted.sv tb_orderbook.cpp tb_orderbook_common.h \
+                    $(SW)/orderbook.c $(SW)/orderbook.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module orderbook_sorted --prefix Vorderbook -GN=64 -CFLAGS "-I$(SW)" \
+		--top-module orderbook_sorted --prefix Vorderbook -GN=64 -CFLAGS "-I$(abspath $(SW))" \
 		$(PKG) $(RTL)/orderbook_sorted.sv tb_orderbook.cpp $(SW)/orderbook.c
+
+$(OBJ)/Vorderbook_unsorted: $(RTL)/orderbook_unsorted.sv tb_orderbook_unsorted.cpp tb_orderbook_common.h \
+                    $(SW)/orderbook.c $(SW)/orderbook.h $(PKG)
+	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
+		--top-module orderbook_unsorted --prefix Vorderbook_unsorted -GN=64 -CFLAGS "-I$(abspath $(SW))" \
+		$(PKG) $(RTL)/orderbook_unsorted.sv tb_orderbook_unsorted.cpp $(SW)/orderbook.c
 
 orderbook: sim
 sim: vectors random
 
-vectors: $(OBJ)/Vorderbook
-	$(OBJ)/Vorderbook --vectors vectors/basic.vec vectors/edge.vec
-random: $(OBJ)/Vorderbook
+vectors: $(OBJ)/Vorderbook $(OBJ)/Vorderbook_unsorted
+	$(OBJ)/Vorderbook --vectors vectors/basic.vec vectors/edge.vec vectors/edge_sorted.vec
+	$(OBJ)/Vorderbook_unsorted --vectors vectors/basic.vec vectors/edge.vec
+random: $(OBJ)/Vorderbook $(OBJ)/Vorderbook_unsorted
 	$(OBJ)/Vorderbook --random $(SEED) $(NOPS)
+	$(OBJ)/Vorderbook_unsorted --random $(SEED) $(NOPS)
 
 # ---------------- arb_trader ----------------
 $(OBJ)/Varb_trader: $(RTL)/arb_trader.sv tb_arb_trader.cpp $(SW)/arb_trader.c $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module arb_trader -CFLAGS "-I$(SW)" \
+		--top-module arb_trader -CFLAGS "-I$(abspath $(SW))" \
 		$(PKG) $(RTL)/arb_trader.sv tb_arb_trader.cpp $(SW)/arb_trader.c
 
 arb: $(OBJ)/Varb_trader
@@ -49,7 +60,7 @@ arb: $(OBJ)/Varb_trader
 # ---------------- momentum_trader ----------------
 $(OBJ)/Vmomentum_trader: $(RTL)/momentum_trader.sv tb_momentum_trader.cpp $(SW)/momentum_trader.c $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module momentum_trader -GN=64 -CFLAGS "-I$(SW)" \
+		--top-module momentum_trader -GN=64 -CFLAGS "-I$(abspath $(SW))" \
 		$(PKG) $(RTL)/momentum_trader.sv tb_momentum_trader.cpp $(SW)/momentum_trader.c
 
 momentum: $(OBJ)/Vmomentum_trader
@@ -58,7 +69,7 @@ momentum: $(OBJ)/Vmomentum_trader
 # ---------------- ema_trader ----------------
 $(OBJ)/Vema_trader: $(RTL)/ema_trader.sv tb_ema_trader.cpp $(SW)/ema_trader.c $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module ema_trader -CFLAGS "-I$(SW)" \
+		--top-module ema_trader -CFLAGS "-I$(abspath $(SW))" \
 		$(PKG) $(RTL)/ema_trader.sv tb_ema_trader.cpp $(SW)/ema_trader.c
 
 ema: $(OBJ)/Vema_trader
@@ -74,28 +85,12 @@ OB_RTL := $(RTL)/orderbook_sorted.sv $(RTL)/orderbook_unsorted.sv $(RTL)/orderbo
 $(OBJ)/Vhft_chip: $(RTL)/hft_chip.sv $(RTL)/hft_core.sv $(TRADERS) $(OB_RTL) pad_stubs.sv \
                    tb_hft_chip.cpp $(MODELS) $(SW)/common.h $(PKG)
 	$(VERILATOR) $(VFLAGS) -Mdir $(OBJ) \
-		--top-module hft_chip -GOB_UNSORTED=$(OB_UNSORTED) -CFLAGS "-I$(SW)" \
+		--top-module hft_chip -GOB_UNSORTED=$(OB_UNSORTED) -CFLAGS "-I$(abspath $(SW))" \
 		$(PKG) $(OB_RTL) $(TRADERS) $(RTL)/hft_core.sv $(RTL)/hft_chip.sv pad_stubs.sv \
 		tb_hft_chip.cpp $(MODELS)
 
 chip: $(OBJ)/Vhft_chip
 	$(OBJ)/Vhft_chip --random $(SEED) $(NOPS)
-
-# -------- orderbook equivalence (sorted vs unsorted, no golden model) --------
-# Self-checking SV testbench: drives both impls through the wrapper with
-# identical random stimulus and fails on any top-of-book divergence. +dense
-# narrows the price range to 2N to stress the eviction path. No C model.
-EQ_N    ?= 64
-EQ_NOPS ?= 200000
-
-$(OBJ)/Vtb_orderbook_equiv: tb_orderbook_equiv.sv $(OB_RTL) $(PKG)
-	$(VERILATOR) --binary --assert -Mdir $(OBJ) \
-		--top-module tb_orderbook_equiv -GN=$(EQ_N) \
-		$(PKG) $(OB_RTL) tb_orderbook_equiv.sv
-
-equiv: $(OBJ)/Vtb_orderbook_equiv
-	$(OBJ)/Vtb_orderbook_equiv +nops=$(EQ_NOPS)
-	$(OBJ)/Vtb_orderbook_equiv +dense +nops=$(EQ_NOPS)
 
 # directed mean-reversion scenario
 SCEN_NOPS ?= 2000
