@@ -1,5 +1,6 @@
 # .gitignore files for cockpit 
 .DS_Store
+settings.json
 
 # all
 *.20[0-9]*-[0-9]*-[0-9]*-[0-9]*:[0-9]*:[0-9]*
@@ -90,3 +91,7 @@
 /tb/obj_equiv*
 /tb/*_scenario.csv
 /backups
+
+#report 
+*.typ
+*.pdf
