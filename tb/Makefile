@@ -105,5 +105,11 @@ arb_scenario: $(OBJ)/Vhft_chip
 momentum_scenario: $(OBJ)/Vhft_chip
 	$(OBJ)/Vhft_chip --scenario momentum $(SEED) $(SCEN_NOPS) momentum_scenario.csv
 
+# directed scenario: all three traders' markets driven concurrently, to
+# exercise the fixed-priority arbiter (arb>mom>ema) on deliberate collisions
+COLLISION_NOPS ?= 20000
+collision_scenario: $(OBJ)/Vhft_chip
+	$(OBJ)/Vhft_chip --scenario collision $(SEED) $(COLLISION_NOPS) collision_scenario.csv
+
 clean:
 	rm -rf $(OBJ)
