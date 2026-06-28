@@ -16,8 +16,7 @@ void mom_init(mom_model_t *m) {
 trade_out_t mom_step(mom_model_t *m, const book_t *b,
                      bool order_filled, qty_t filled_qty, ob_side_t filled_side,
                      bool grant) {
-    bool error_d = m->error || (order_filled && m->pending == 0)
-                             || (order_filled && filled_qty > m->order_qty);
+    bool error_d = m->error || (order_filled && m->pending == 0);
     trade_out_t o = { false, false, Bid, 0, 0, error_d };
 
     mom_model_t n = *m;

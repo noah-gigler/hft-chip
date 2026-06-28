@@ -85,8 +85,7 @@ module ema_trader
         logic [1:0] pend_next;
 
         state_d      = state_q;
-        error_d      = error_q | (order_filled_i && pending_q == 0)
-                                | (order_filled_i && filled_qty_i > order_qty_q);
+        error_d      = error_q | (order_filled_i && pending_q == 0);
         ema_d        = ema_q;
         ema_init_d   = ema_init_q;
         order_side_d  = order_side_q;
